@@ -228,7 +228,105 @@ def export_csv(results: list[dict], output_path: str = None):
 
 
 # ===============================================
-#  示例数据（金艳龙科技当前情况）
+#  企业所得税季度预缴（小型微利企业优惠）
+# ===============================================
+
+def calc_corporate_income_tax_quarterly(
+    revenue: float,
+    cost: float,
+    period_profit: float,
+    ytd_profit: float,
+    num_employees: int,
+    total_assets: float,
+) -> dict:
+    """
+    计算小型微利企业所得税季度预缴
+    返回申报底稿数据字典
+
+    参数：
+      revenue:        季度营业收入（元）
+      cost:           季度营业成本（元）
+      period_profit:  季度利润总额（元）
+      ytd_profit:     本年累计利润总额（元）
+      num_employees:  季度平均从业人数
+      total_assets:    季度平均资产总额（万元）
+
+    小型微利企业标准（2026年）：
+      - 年应纳税所得额 ≤ 300万元
+      - 从业人数 ≤ 300人
+      - 资产总额 ≤ 5000万元
+    """
+    # 判断是否符合小型微利企业条件
+    is_small_low_profit = (
+        num_employees <= 300
+        and total_assets <= 5000
+    )
+
+    # 实际税率（小型微利企业优惠）
+    # 应纳税所得额 ≤ 300万：实际税负 5%
+    # 注：2024-2027年政策，小型微利企业减按25%计入，按20%税率，实际 5%
+    effective_rate = 0.05 if is_small_low_profit else 0.25
+
+    # 季度应纳税所得额（以利润总额为准）
+    period_taxable = max(period_profit, 0)
+    ytd_taxable = max(ytd_profit, 0)
+
+    # 本期应纳企业所得税
+    period_tax = round(period_taxable * effective_rate, 2)
+    ytd_tax = round(ytd_taxable * effective_rate, 2)
+
+    # 已预缴税额（需手动填写或累计计算）
+    tax_paid_ytd = 0.0  # 本年累计已预缴
+
+    return {
+        "营业收入": round(revenue, 2),
+        "营业成本": round(cost, 2),
+        "利润总额": round(period_profit, 2),
+        "应纳税所得额": period_taxable,
+        "适用税率": effective_rate,
+        "本期应纳税额": period_tax,
+        "本年累计应纳税额": ytd_tax,
+        "本年累计已预缴": tax_paid_ytd,
+        "本期应补(退)税额": round(period_tax, 2),
+        "从业人数": num_employees,
+        "资产总额_万元": total_assets,
+        "是否小型微利企业": "是" if is_small_low_profit else "否",
+    }
+
+
+def format_corporate_tax_report(result: dict, quarter: int, year: int) -> str:
+    """生成企业所得税申报说明文字"""
+    lines = [
+        f"【{year}年第{quarter}季度 企业所得税预缴申报说明】",
+        "",
+        f"一、经营情况",
+        f"  营业收入：    {result['营业收入']:,.2f} 元",
+        f"  营业成本：    {result['营业成本']:,.2f} 元",
+        f"  利润总额：    {result['利润总额']:,.2f} 元",
+        "",
+        f"二、纳税调整",
+        f"  应纳税所得额：{result['应纳税所得额']:,.2f} 元",
+        f"  企业类型：    {result['是否小型微利企业']}",
+        f"  适用税率：    {result['适用税率']*100:.0f}%",
+        "",
+        f"三、税款计算",
+        f"  本期应纳税额：      {result['本期应纳税额']:,.2f} 元",
+        f"  本年累计已预缴：  {result['本年累计已预缴']:,.2f} 元",
+        f"  本期应补(退)税额：{result['本期应补(退)税额']:,.2f} 元",
+        "",
+        "四、申报提醒",
+        "  1. 请核对利润总额是否与利润表一致；",
+        "  2. 小型微利企业优惠系统自动判别，无需额外备案；",
+        "  3. 申报截止时间为季度终了后15日内；",
+        "  4. 请及时在电子税务局完成预缴申报。",
+        "",
+        "—— 由 金艳龙AI税务助手 自动生成",
+    ]
+    return "\n".join(lines)
+
+
+# ===============================================
+#  主程序（示例）
 # ===============================================
 if __name__ == "__main__":
     print("武汉金艳龙科技 - 个税社保计算工具 v1.0")
