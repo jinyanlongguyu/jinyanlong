@@ -6,12 +6,14 @@
 
 API Key 配置优先级：
   1. 侧边栏手动输入（最高）
-  2. .env 文件中的 DEEPSEEK_API_KEY
-  3. 未配置则使用模拟模式
+  2. .streamlit/secrets.toml 或 Streamlit Cloud secrets
+  3. .env 文件中的 DEEPSEEK_API_KEY
+  4. 未配置则使用模拟模式
 """
 
 import sys
 import os
+import json
 import requests
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -28,6 +30,8 @@ from tax_calculator import (
     SOCIAL_INSURANCE_ACTUAL,
     SOCIAL_INSURANCE_COMPANY,
     BASIC_DEDUCTION,
+    calc_corporate_income_tax_quarterly,
+    format_corporate_tax_report,
 )
 
 # ===============================================
@@ -349,21 +353,21 @@ with st.sidebar:
     st.subheader("DeepSeek AI")
     current_key, key_source = get_api_key()
 
-    if key_source == "env":
-        st.success("✅ 已通过 .env 文件配置 API Key")
+    if key_source in ("secrets", "env"):
+        st.success("✅ 已通过配置文件配置 API Key")
         st.caption("如需临时覆盖，可在下方输入")
     elif key_source == "manual":
         st.success("✅ 已手动配置 API Key")
     else:
         st.warning("⚠️ 未配置 API Key")
-        st.caption("请在 .env 文件中添加 DEEPSEEK_API_KEY=sk-xxx，或在下方输入")
+        st.caption("请在 .streamlit/secrets.toml 中添加 DEEPSEEK_API_KEY=sk-xxx，或在下方输入")
 
     # 手动输入（可覆盖 .env）
     api_key_manual = st.text_input(
-        "手动输入 API Key（可选，覆盖 .env）",
+        "手动输入 API Key（可选，覆盖配置文件）",
         value=st.session_state.get("deepseek_api_key_manual", ""),
         type="password",
-        help="在 platform.deepseek.com 获取。留空则使用 .env 文件中的配置。",
+        help="在 platform.deepseek.com 获取。留空则使用配置文件中的配置。",
         key="deepseek_api_key_manual_input",
     )
     # 同步到 session_state
@@ -391,7 +395,7 @@ with st.sidebar:
     st.markdown(f"**个税起征点**：{BASIC_DEDUCTION} 元/月")
 
     st.divider()
-    st.caption("金艳龙AI税务助手 v1.2")
+    st.caption("金艳龙AI税务助手 v1.3")
     st.caption("仅供参考，申报前请核实")
 
 # ===============================================
@@ -401,7 +405,7 @@ with st.sidebar:
 st.title("💰 金艳龙AI税务助手")
 st.caption("武汉金艳龙科技有限公司 · 个税/社保计算 + AI 申报说明生成")
 
-tab1, tab2, tab3 = st.tabs(["💰 工资计算", "📋 批量导入", "📄 申报说明"])
+tab1, tab2, tab3, tab4 = st.tabs(["💰 工资计算", "📋 批量导入", "📄 申报说明", "📊 季度申报"])
 
 # ---- Tab1：手动录入 ----
 with tab1:
@@ -651,3 +655,325 @@ with tab3:
             mime="text/plain",
             use_container_width=True,
         )
+
+# ===============================================
+#  季度申报数据持久化
+# ===============================================
+
+QUARTER_DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "季度申报数据.json")
+
+
+def load_quarter_data(year: int) -> dict:
+    """加载某年度的季度申报数据"""
+    if not os.path.exists(QUARTER_DATA_FILE):
+        return {}
+    try:
+        with open(QUARTER_DATA_FILE, "r", encoding="utf-8") as f:
+            all_data = json.load(f)
+            return all_data.get(str(year), {})
+    except Exception:
+        return {}
+
+
+def save_quarter_data(year: int, quarter: int, data: dict):
+    """保存季度申报数据"""
+    if os.path.exists(QUARTER_DATA_FILE):
+        with open(QUARTER_DATA_FILE, "r", encoding="utf-8") as f:
+            all_data = json.load(f)
+    else:
+        all_data = {}
+
+    if str(year) not in all_data:
+        all_data[str(year)] = {}
+
+    all_data[str(year)][str(quarter)] = data
+    all_data[str(year)]["_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    with open(QUARTER_DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(all_data, f, ensure_ascii=False, indent=2)
+
+
+def get_ytd_values(year: int, quarter: int) -> dict:
+    """获取本年累计值（基于已保存的上季度数据）"""
+    data = load_quarter_data(year)
+    ytd_revenue = 0.0
+    ytd_cost = 0.0
+    ytd_profit = 0.0
+
+    for q in range(1, quarter):
+        if str(q) in data:
+            q_data = data[str(q)]
+            ytd_revenue += q_data.get("revenue", 0)
+            ytd_cost += q_data.get("cost", 0)
+            ytd_profit += q_data.get("period_profit", 0)
+
+    return {
+        "ytd_revenue": ytd_revenue,
+        "ytd_cost": ytd_cost,
+        "ytd_profit": ytd_profit,
+    }
+
+
+# ===============================================
+#  Tab4：季度企业所得税申报
+# ===============================================
+
+# ---- Tab4：季度企业所得税申报 ----
+with tab4:
+    st.header("📊 企业所得税季度预缴申报")
+
+    st.info(
+        "小型微利企业优惠税率 5%（2024-2027年政策）。\n"
+        "系统会自动加载上季度数据，计算本年累计值。"
+    )
+
+    # ========== 季度选择 ==========
+    col_q, col_y = st.columns([1, 1])
+    with col_q:
+        quarter = st.selectbox("申报季度", [1, 2, 3, 4], index=min(datetime.now().month // 3, 3))
+    with col_y:
+        year = st.number_input("年度", min_value=2024, max_value=2030, value=datetime.now().year)
+
+    # ========== 加载上季度数据 ==========
+    ytd = get_ytd_values(year, quarter)
+    prev_saved = load_quarter_data(year)
+
+    if quarter > 1 and str(quarter - 1) in prev_saved:
+        st.success(
+            f"✅ 已加载 Q{quarter-1} 数据："
+            f"累计收入 {ytd['ytd_revenue']:.2f} 元，"
+            f"累计利润 {ytd['ytd_profit']:.2f} 元"
+        )
+
+    st.divider()
+
+    # ========== 银行流水导入区域 ==========
+    with st.expander("📥 导入银行流水（自动填表）", expanded=False):
+        st.caption("支持民生银行、建设银行等 CSV/Excel 流水文件，自动分类并填入下方表单")
+
+        bank_file = st.file_uploader(
+            "上传银行流水文件（可多次上传不同银行）",
+            type=["csv", "xlsx", "xls"],
+            key="bank_uploader",
+            accept_multiple_files=True,
+        )
+
+        if bank_file:
+            try:
+                all_txns = []
+                for bf in bank_file:
+                    # 读取文件
+                    if bf.name.endswith(".csv"):
+                        try:
+                            df_bank = pd.read_csv(bf, encoding="utf-8-sig")
+                        except Exception:
+                            bf.seek(0)
+                            df_bank = pd.read_csv(bf, encoding="gbk")
+                    else:
+                        df_bank = pd.read_excel(bf)
+
+                    # 统一列名（常见银行格式兼容）
+                    col_map = {}
+                    for col in df_bank.columns:
+                        col_lower = str(col).strip().lower()
+                        if any(k in col_lower for k in ["日期", "date", "交易日期", "记账日期"]):
+                            col_map[col] = "交易日期"
+                        elif any(k in col_lower for k in ["摘要", "备注", "用途", "description", "摘要说明"]):
+                            col_map[col] = "摘要"
+                        elif any(k in col_lower for k in ["收入", "贷方", "存款", "credit", "存入"]):
+                            col_map[col] = "收入金额"
+                        elif any(k in col_lower for k in ["支出", "借方", "取款", "debit", "转出"]):
+                            col_map[col] = "支出金额"
+                        elif any(k in col_lower for k in ["金额", "发生额", "transaction"]):
+                            col_map[col] = "金额"
+                        elif any(k in col_lower for k in ["余额", "balance"]):
+                            col_map[col] = "余额"
+                        elif any(k in col_lower for k in ["借贷", "收支方向", "类型"]):
+                            col_map[col] = "借贷标识"
+
+                    df_bank = df_bank.rename(columns=col_map)
+
+                    # 如果没有明确的收入/支出列，尝试从"金额"+"借贷标识"推断
+                    if "金额" in df_bank.columns and "借贷标识" in df_bank.columns:
+                        for _, row in df_bank.iterrows():
+                            amount = abs(float(row.get("金额") or 0))
+                            flag = str(row.get("借贷标识", "")).strip()
+                            txn = {
+                                "银行": bf.name,
+                                "日期": row.get("交易日期", ""),
+                                "摘要": row.get("摘要", ""),
+                                "收入金额": amount if flag in ["贷", "收入", "存入", "CREDIT"] else 0,
+                                "支出金额": amount if flag in ["借", "支出", "转出", "DEBIT"] else 0,
+                            }
+                            all_txns.append(txn)
+                    else:
+                        # 直接取收入/支出列
+                        for _, row in df_bank.iterrows():
+                            all_txns.append({
+                                "银行": bf.name,
+                                "日期": row.get("交易日期", row.get("日期", "")),
+                                "摘要": row.get("摘要", ""),
+                                "收入金额": float(row.get("收入金额", 0) or 0),
+                                "支出金额": float(row.get("支出金额", 0) or 0),
+                            })
+
+                df_txns = pd.DataFrame(all_txns)
+                st.success(f"✅ 成功读取 {len(df_txns)} 条交易记录")
+
+                # 简单分类（根据关键词）
+                def classify_txn(desc):
+                    desc = str(desc).lower()
+                    if any(k in desc for k in ["货款", "收入", "销售", "服务费", "咨询费", "收款"]):
+                        return "营业收入"
+                    elif any(k in desc for k in ["工资", "社保", "公积金", "福利"]):
+                        return "管理费用-人工"
+                    elif any(k in desc for k in ["水电", "物业", "房租", "租赁"]):
+                        return "管理费用-办公"
+                    elif any(k in desc for k in ["采购", "进货", "成本", "材料"]):
+                        return "营业成本"
+                    elif any(k in desc for k in ["报销", "差旅", "交通", "餐饮", "办公用品"]):
+                        return "管理费用-其他"
+                    elif any(k in desc for k in ["税", "费"]):
+                        return "税金及附加"
+                    else:
+                        return "待分类"
+
+                df_txns["自动分类"] = df_txns["摘要"].apply(classify_txn)
+                st.dataframe(df_txns[["日期", "摘要", "收入金额", "支出金额", "自动分类"]].head(10), use_container_width=True)
+
+                st.subheader("请确认交易分类（可手动修改）")
+                edited_df = st.data_editor(
+                    df_txns[["日期", "摘要", "收入金额", "支出金额", "自动分类"]],
+                    use_container_width=True,
+                    num_rows="dynamic",
+                    key="txn_editor",
+                )
+
+                # 计算汇总
+                revenue_total = edited_df[edited_df["自动分类"] == "营业收入"]["收入金额"].sum()
+                cost_total = edited_df[edited_df["自动分类"] == "营业成本"]["支出金额"].sum()
+                expense_total = edited_df[edited_df["自动分类"].str.contains("管理费用", na=False)]["支出金额"].sum()
+                profit = revenue_total - cost_total - expense_total
+
+                st.subheader("📈 自动汇总结果（本期）")
+                col_a, col_b, col_c, col_d = st.columns(4)
+                col_a.metric("营业收入", f"{revenue_total:.2f}")
+                col_b.metric("营业成本", f"{cost_total:.2f}")
+                col_c.metric("管理费用", f"{expense_total:.2f}")
+                col_d.metric("利润总额", f"{profit:.2f}")
+
+                if st.button("✅ 确认并填入申报表", use_container_width=True, type="primary", key="btn_fill_quarter"):
+                    st.session_state["auto_revenue"] = revenue_total
+                    st.session_state["auto_cost"] = cost_total
+                    st.session_state["auto_profit"] = profit
+                    st.success("✅ 已自动填入申报表，请向下滚动确认数据！")
+                    st.rerun()
+
+            except Exception as e:
+                st.error(f"银行流水解析失败：{e}")
+                st.caption("请确保文件包含：日期、摘要、收入金额、支出金额 等列")
+
+    st.divider()
+
+    # ========== 手动输入区域 ==========
+    c1, c2 = st.columns(2)
+    with c1:
+        st.subheader("本期数（Q" + str(quarter) + "）")
+
+        # 自动填入（如果银行流水导入了）
+        rev_val = st.session_state.get("auto_revenue", 0.0)
+        revenue = st.number_input("季度营业收入（元）", min_value=0.0, value=rev_val, step=1000.0, key="q_revenue")
+
+        cost_val = st.session_state.get("auto_cost", 0.0)
+        cost = st.number_input("季度营业成本（元）", min_value=0.0, value=cost_val, step=1000.0, key="q_cost")
+
+    with c2:
+        st.subheader("本期利润及企业信息")
+
+        profit_val = st.session_state.get("auto_profit", 0.0)
+        period_profit = st.number_input("季度利润总额（元）", value=profit_val, step=1000.0, key="q_profit")
+
+        num_employees = st.number_input("季度平均从业人数", min_value=1, value=1, step=1)
+        total_assets = st.number_input("季度平均资产总额（万元）", min_value=0.0, value=0.0, step=10.0)
+
+    # ========== 累计数（自动计算）==========
+    st.divider()
+    st.subheader("📈 累计数（自动计算）")
+
+    ytd_revenue = ytd["ytd_revenue"] + revenue
+    ytd_cost = ytd["ytd_cost"] + cost
+    ytd_profit = ytd["ytd_profit"] + period_profit
+
+    col_y1, col_y2, col_y3 = st.columns(3)
+    col_y1.metric("本年累计营业收入", f"{ytd_revenue:.2f} 元")
+    col_y2.metric("本年累计营业成本", f"{ytd_cost:.2f} 元")
+    col_y3.metric("本年累计利润总额", f"{ytd_profit:.2f} 元")
+
+    # ========== 计算按钮 ==========
+    st.divider()
+
+    if st.button("🚀 计算季度预缴税额", use_container_width=True, type="primary"):
+        result = calc_corporate_income_tax_quarterly(
+            revenue, cost, period_profit, ytd_profit,
+            int(num_employees), total_assets,
+        )
+        st.session_state["corp_tax_result"] = result
+
+        # 保存本期数据
+        save_quarter_data(year, quarter, {
+            "revenue": revenue,
+            "cost": cost,
+            "period_profit": period_profit,
+            "ytd_revenue": ytd_revenue,
+            "ytd_cost": ytd_cost,
+            "ytd_profit": ytd_profit,
+            "num_employees": int(num_employees),
+            "total_assets": total_assets,
+            "tax_payable": result["本期应纳税额"],
+            "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        })
+
+        st.success(f"✅ 计算完成！Q{quarter} 数据已保存，下次申报 Q{quarter+1} 时会自动加载。")
+
+    # ========== 计算结果展示 ==========
+    if "corp_tax_result" in st.session_state:
+        r = st.session_state["corp_tax_result"]
+
+        st.subheader("📈 计算结果")
+        m1, m2, m3 = st.columns(3)
+        m1.metric("季度利润总额", f"{r['利润总额']:.2f} 元")
+        m2.metric("应纳税所得额", f"{r['应纳税所得额']:.2f} 元")
+        m3.metric("本期应纳税额", f"{r['本期应纳税额']:.2f} 元")
+
+        # 详细结果表格
+        df_corp = pd.DataFrame([r])
+        numeric_cols = df_corp.select_dtypes(include=["float64", "int64"]).columns
+        st.dataframe(
+            df_corp.style.format("{:.2f}", subset=numeric_cols),
+            use_container_width=True,
+        )
+
+        # AI 申报说明
+        st.subheader("📄 申报说明")
+        report_text = format_corporate_tax_report(r, quarter, year)
+        st.text_area("申报说明", report_text, height=350, key="corp_tax_area")
+
+        # 下载
+        col_dl1, col_dl2 = st.columns(2)
+        with col_dl1:
+            st.download_button(
+                label="📥 下载申报说明（TXT）",
+                data=report_text,
+                file_name=f"企业所得税预缴申报_{year}Q{quarter}.txt",
+                mime="text/plain",
+                use_container_width=True,
+            )
+        with col_dl2:
+            csv_corp = df_corp.to_csv(index=False, encoding="utf-8-sig")
+            st.download_button(
+                label="📥 下载申报底稿（CSV）",
+                data=csv_corp,
+                file_name=f"企业所得税预缴申报_{year}Q{quarter}.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
