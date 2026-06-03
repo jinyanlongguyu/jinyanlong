@@ -1063,7 +1063,17 @@ def classify_bank_transaction(desc: str) -> dict:
             "account": "税金及附加"
         }
     
-    # 四、管理费用（利润表第5行）
+    # 四、销售费用（利润表第11行）
+    elif any(k in desc for k in ["广告", "推广", "营销", "宣传", "展览", 
+                                 "运输费", "装卸费", "包装费", "销售佣金", "促销"]):
+        return {
+            "category": "销售费用",
+            "pl_item": "销售费用",
+            "type": "支出",
+            "account": "销售费用"
+        }
+    
+    # 五、管理费用（利润表第14行）
     elif any(k in desc for k in ["工资", "社保", "公积金", "福利费", "奖金", 
                                  "养老金", "医保", "医疗保险", "生育保险", "失业保险", "工伤保险"]):
         return {
@@ -1091,7 +1101,7 @@ def classify_bank_transaction(desc: str) -> dict:
             "account": "管理费用-业务招待费"
         }
     
-    # 五、财务费用（利润表第6行）
+    # 六、财务费用（利润表第18行）
     elif any(k in desc for k in ["利息", "手续费", "银行手续费", "汇款手续费", 
                                  "贷款利息", "存款利息", "结息"]):
         return {
@@ -1101,7 +1111,17 @@ def classify_bank_transaction(desc: str) -> dict:
             "account": "财务费用-手续费"
         }
     
-    # 六、营业外收入（利润表第10行）
+    # 七、投资收益（利润表第20行）
+    elif any(k in desc for k in ["分红", "投资收益", "股息", "理财收益", 
+                                 "投资收入"]):
+        return {
+            "category": "投资收益",
+            "pl_item": "投资收益",
+            "type": "收入",
+            "account": "投资收益"
+        }
+    
+    # 八、营业外收入（利润表第22行）
     elif any(k in desc for k in ["政府补助", "补贴", "罚款收入", "违约金收入", 
                                  "捐赠收入", "盘盈"]):
         return {
@@ -1111,19 +1131,9 @@ def classify_bank_transaction(desc: str) -> dict:
             "account": "营业外收入"
         }
     
-    # 七、营业外支出（利润表第11行）
+    # 九、营业外支出（利润表第24行）
     elif any(k in desc for k in ["罚款", "捐赠", "损失", "盘亏", "自然灾害损失", 
                                  "违约金支出"]):
-        return {
-            "category": "营业外支出",
-            "pl_item": "营业外支出",
-            "type": "支出",
-            "account": "营业外支出"
-        }
-    
-    # 八、投资收益（利润表第8行）
-    elif any(k in desc for k in ["分红", "投资收益", "股息", "理财收益", 
-                                 "投资收入"]):
         return {
             "category": "投资收益",
             "pl_item": "投资收益",
@@ -1142,67 +1152,81 @@ def classify_bank_transaction(desc: str) -> dict:
 
 def generate_profit_statement(df_txns: object) -> dict:
     """
-    根据银行流水DataFrame，生成小企业会计准则利润表
+    根据银行流水DataFrame，生成小企业会计准则利润表（会小企02表）
     df_txns 必须包含列：["摘要", "收入金额", "支出金额", "自动分类"]
     
-    返回利润表各项目金额（单位：元）
+    返回利润表各项目金额（单位：元），行次对应 会小企02表。
+    官方行次：1营业收入, 2营业成本, 3税金及附加, 11销售费用,
+              14管理费用, 18财务费用, 20投资收益, 21营业利润,
+              22营业外收入, 24营业外支出, 30利润总额, 31所得税费用, 32净利润
     """
-    # 营业收入（第1行）= 所有营业收入分类的收入金额之和
+    # 第1行：营业收入
     revenue = df_txns[df_txns["自动分类"] == "营业收入"]["收入金额"].sum()
     
-    # 营业成本（第2行）= 所有营业成本分类的支出金额之和
+    # 第2行：营业成本
     cost = df_txns[df_txns["自动分类"] == "营业成本"]["支出金额"].sum()
     
-    # 税金及附加（第3行）
+    # 第3行：税金及附加
     tax_expense = df_txns[df_txns["自动分类"] == "税金及附加"]["支出金额"].sum()
     
-    # 管理费用（第5行）= 所有管理费用子分类的支出金额之和
+    # 第11行：销售费用
+    selling_expense = df_txns[
+        df_txns["自动分类"].str.contains("销售费用", na=False)
+    ]["支出金额"].sum()
+    
+    # 第14行：管理费用 = 所有管理费用子分类的支出金额之和
     manage_expense = df_txns[
         df_txns["自动分类"].str.contains("管理费用", na=False)
     ]["支出金额"].sum()
     
-    # 财务费用（第6行）
+    # 第18行：财务费用（含利息收入，以负数列示）
     finance_expense = df_txns[df_txns["自动分类"] == "财务费用"]["支出金额"].sum()
+    finance_income = df_txns[df_txns["自动分类"] == "财务费用"]["收入金额"].sum()
+    finance_net = round(finance_expense - finance_income, 2)  # 利息收入抵减
     
-    # 投资收益（第8行）
+    # 第20行：投资收益
     investment_income = df_txns[df_txns["自动分类"] == "投资收益"]["收入金额"].sum()
     
-    # 营业利润（第9行）= 营业收入 - 营业成本 - 税金及附加 - 管理费用 - 财务费用 + 投资收益
-    operating_profit = revenue - cost - tax_expense - manage_expense - finance_expense + investment_income
+    # 第21行：营业利润 = 1 - 2 - 3 - 11 - 14 - 18 + 20
+    operating_profit = round(
+        revenue - cost - tax_expense - selling_expense
+        - manage_expense - finance_net + investment_income, 2
+    )
     
-    # 营业外收入（第10行）
+    # 第22行：营业外收入
     other_income = df_txns[df_txns["自动分类"] == "营业外收入"]["收入金额"].sum()
     
-    # 营业外支出（第11行）
+    # 第24行：营业外支出
     other_expense = df_txns[df_txns["自动分类"] == "营业外支出"]["支出金额"].sum()
     
-    # 利润总额（第12行）= 营业利润 + 营业外收入 - 营业外支出
-    total_profit = operating_profit + other_income - other_expense
+    # 第30行：利润总额 = 21 + 22 - 24
+    total_profit = round(operating_profit + other_income - other_expense, 2)
     
-    # 所得税费用（第13行）= 利润总额 × 小型微利实际税率
+    # 第31行：所得税费用（亏损为0）
     if total_profit > 0:
         pol = load_tax_policies()
         eff_rate = pol["corporate_income_tax"]["small_low_profit_effective_rate"]
-        income_tax = total_profit * eff_rate
+        income_tax = round(total_profit * eff_rate, 2)
     else:
         income_tax = 0.0
     
-    # 净利润（第14行）= 利润总额 - 所得税费用
-    net_profit = total_profit - income_tax
+    # 第32行：净利润 = 30 - 31
+    net_profit = round(total_profit - income_tax, 2)
     
     return {
         "营业收入": round(revenue, 2),
         "营业成本": round(cost, 2),
         "税金及附加": round(tax_expense, 2),
+        "销售费用": round(selling_expense, 2),
         "管理费用": round(manage_expense, 2),
-        "财务费用": round(finance_expense, 2),
+        "财务费用": finance_net,
         "投资收益": round(investment_income, 2),
-        "营业利润": round(operating_profit, 2),
+        "营业利润": operating_profit,
         "营业外收入": round(other_income, 2),
         "营业外支出": round(other_expense, 2),
-        "利润总额": round(total_profit, 2),
-        "所得税费用": round(income_tax, 2),
-        "净利润": round(net_profit, 2),
+        "利润总额": total_profit,
+        "所得税费用": income_tax,
+        "净利润": net_profit,
     }
 
 
