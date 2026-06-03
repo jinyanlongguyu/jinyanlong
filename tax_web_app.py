@@ -3957,7 +3957,7 @@ with tab6:
 with tab1:
     st.header("🗂️ 年报数据导入")
     st.caption("支持 Excel / PDF 两种格式。导入后年报数据自动拆分为 4 个季度申报底稿。税务年报与内部底稿不一致时，重新导入即可纠偏。")
-    st.success("✅ v1.6.1 — 年报导入模块已就绪")
+    st.success("✅ v1.6.4 — 年报导入模块已就绪（2026-06-03 build）")
 
     # ── 检查是否有历史导入 ──
     snapshot_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "年报导入快照.json")
