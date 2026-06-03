@@ -1916,6 +1916,34 @@ with tab2:
             f"累计利润 {ytd['ytd_profit']:.2f} 元"
         )
 
+    # ========== 自动加载当前季度已保存数据 ==========
+    current_q_key = str(quarter)
+    current_saved = prev_saved.get(current_q_key, None) if prev_saved else None
+
+    if current_saved:
+        q_source = current_saved.get("_source", "手动录入")
+        st.info(
+            f"📂 已检测到 **{year}年Q{quarter}** 已有申报数据（来源：{q_source}），"
+            f"已自动填入下方表单。如需修改可直接编辑。",
+            icon="📋"
+        )
+        # 自动填入表单
+        st.session_state["auto_revenue"] = float(current_saved.get("revenue", 0))
+        st.session_state["auto_cost"] = float(current_saved.get("cost", 0))
+        st.session_state["auto_profit"] = float(current_saved.get("period_profit", 0))
+        st.session_state["auto_vat_revenue"] = float(current_saved.get("vat_revenue",
+            current_saved.get("revenue", 0)))
+        st.session_state["auto_num_employees"] = int(current_saved.get("num_employees", 1))
+        st.session_state["auto_total_assets"] = float(current_saved.get("total_assets", 0))
+
+    # 年度切换时清除旧的自动填入（避免2025数据残留在2026）
+    prev_auto_year = st.session_state.get("_last_auto_year", None)
+    if prev_auto_year != year:
+        for k in ["auto_revenue", "auto_cost", "auto_profit", "auto_vat_revenue",
+                  "auto_num_employees", "auto_total_assets", "vat_data", "corp_tax_result"]:
+            st.session_state.pop(k, None)
+    st.session_state["_last_auto_year"] = year
+
     st.divider()
 
     # ========== 银行流水导入区域 ==========
@@ -2110,8 +2138,12 @@ with tab2:
         profit_val = st.session_state.get("auto_profit", 0.0)
         period_profit = st.number_input("季度利润总额（元）", value=profit_val, step=1000.0, key="q_profit")
 
-        num_employees = st.number_input("季度平均从业人数", min_value=1, value=1, step=1)
-        total_assets = st.number_input("季度平均资产总额（万元）", min_value=0.0, value=0.0, step=10.0)
+        num_employees = st.number_input(
+            "季度平均从业人数", min_value=1,
+            value=st.session_state.get("auto_num_employees", 1), step=1, key="q_employees")
+        total_assets = st.number_input(
+            "季度平均资产总额（万元）", min_value=0.0,
+            value=st.session_state.get("auto_total_assets", 0.0), step=10.0, key="q_assets")
 
     # ========== 累计数（自动计算）==========
     st.divider()
@@ -2142,7 +2174,8 @@ with tab2:
         vat_revenue_input = st.number_input(
             "季度含税营业收入（元，用于计算增值税）",
             min_value=0.0,
-            value=float(st.session_state.get("auto_revenue", revenue)),
+            value=float(st.session_state.get("auto_vat_revenue",
+                       st.session_state.get("auto_revenue", revenue))),
             step=1000.0,
             key="vat_revenue",
             help="小规模纳税人：季度不含税收入 ≤ 30万元可免征增值税",
@@ -2230,6 +2263,7 @@ with tab2:
             "revenue": revenue,
             "cost": cost,
             "period_profit": period_profit,
+            "vat_revenue": vat_revenue_input,
             "ytd_revenue": ytd_revenue,
             "ytd_cost": ytd_cost,
             "ytd_profit": ytd_profit,
@@ -2237,6 +2271,7 @@ with tab2:
             "total_assets": total_assets,
             "tax_payable": result["本期应纳税额"],
             "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "_source": "手动录入",
         })
 
         # 保存年份/季度供 Tab5 使用
@@ -3968,7 +4003,7 @@ with tab6:
 with tab1:
     st.header("🗂️ 年报数据导入")
     st.caption("支持 Excel / PDF 两种格式。导入后年报数据自动拆分为 4 个季度申报底稿。税务年报与内部底稿不一致时，重新导入即可纠偏。")
-    st.success("✅ v1.6.7 — 年报导入模块已就绪（2026-06-03 build）")
+    st.success("✅ v1.7.0 — 年报导入 & 季报联动已就绪（2026-06-03 build）")
 
     # ── 检查是否有历史导入 ──
     snapshot_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "年报导入快照.json")
@@ -4423,15 +4458,18 @@ with tab1:
                     }
 
             quarter_imported = 0
+            target_year = 2025  # 年报数据所属年度
             for q_name, q_data in q_data_map.items():
                 q_num = int(q_name.replace("Q", ""))
-                save_quarter_data(2025, q_num, {
+                save_quarter_data(target_year, q_num, {
                     "revenue": q_data.get("revenue", 0),
                     "cost": q_data.get("cost", 0),
                     "period_profit": q_data.get("period_profit", 0),
                     "vat_revenue": q_data.get("vat_revenue", 0),
-                    "avg_employees": q_data.get("avg_employees", avg_emp),
-                    "avg_assets": q_data.get("avg_assets", avg_assets),
+                    "num_employees": int(q_data.get("avg_employees", avg_emp)),
+                    "total_assets": q_data.get("avg_assets", avg_assets),
+                    "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "_source": "年报导入",
                 })
                 quarter_imported += 1
             import_count += 1
