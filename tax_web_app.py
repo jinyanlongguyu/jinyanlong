@@ -72,7 +72,7 @@ def make_pdf(title: str, body_lines: list, filename: str) -> bytes | None:
             # 处理中文：用 ASCII 替代方案
             safe_line = line.encode("ascii", errors="replace").decode("ascii")
             pdf.multi_cell(0, 5, safe_line)
-        return pdf.output()
+        return bytes(pdf.output())
     except Exception:
         return None
 
@@ -112,7 +112,7 @@ def make_pdf_with_dataframe(title: str, df, summary_lines: list, filename: str) 
             safe = line.encode("ascii", errors="replace").decode("ascii")
             pdf.multi_cell(0, 5, safe)
 
-        return pdf.output()
+        return bytes(pdf.output())
     except Exception:
         return None
 
@@ -768,7 +768,7 @@ def gen_annual_report_template_pdf_bytes() -> bytes | None:
             f"模板生成日期：{datetime.now().strftime('%Y-%m-%d %H:%M')}"
         )
 
-        return pdf.output()
+        return bytes(pdf.output())
     except Exception as e:
         return None
 
