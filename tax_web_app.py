@@ -2382,355 +2382,354 @@ with tab5:
 
     if r5 is None:
         st.info("💡 请先在「📊 季度申报」页面填写数据并点击「计算季度预缴税额」，完成后返回本页查看税款缴纳清单。", icon="ℹ️")
-        st.stop()
+    if r5 is not None:
+        # 年份/季度
+        all_qdata = {}
+        if os.path.exists(QUARTER_DATA_FILE):
+            with open(QUARTER_DATA_FILE, "r", encoding="utf-8") as _f:
+                all_qdata = json.load(_f)
 
-    # 年份/季度
-    all_qdata = {}
-    if os.path.exists(QUARTER_DATA_FILE):
-        with open(QUARTER_DATA_FILE, "r", encoding="utf-8") as _f:
-            all_qdata = json.load(_f)
+        latest_year = max(all_qdata.keys(), default=str(datetime.now().year))
+        latest_qdata_key = str(st.session_state.get("_tax_year", int(latest_year)))
+        disp_year = st.session_state.get("_tax_year", int(latest_year))
+        disp_quarter = st.session_state.get("_tax_quarter", datetime.now().month // 3 or 1)
 
-    latest_year = max(all_qdata.keys(), default=str(datetime.now().year))
-    latest_qdata_key = str(st.session_state.get("_tax_year", int(latest_year)))
-    disp_year = st.session_state.get("_tax_year", int(latest_year))
-    disp_quarter = st.session_state.get("_tax_quarter", datetime.now().month // 3 or 1)
+        # ===== 工资个税数据 =====
+        payroll_results = st.session_state.get("results", [])
+        total_personal_tax = sum(float(e.get("应纳税额", 0)) for e in payroll_results)
+        total_company_social = sum(float(e.get("公司社保", 0)) for e in payroll_results)
+        total_personal_social = sum(float(e.get("个人社保", 0)) for e in payroll_results)
+        employee_count = len(payroll_results)
 
-    # ===== 工资个税数据 =====
-    payroll_results = st.session_state.get("results", [])
-    total_personal_tax = sum(float(e.get("应纳税额", 0)) for e in payroll_results)
-    total_company_social = sum(float(e.get("公司社保", 0)) for e in payroll_results)
-    total_personal_social = sum(float(e.get("个人社保", 0)) for e in payroll_results)
-    employee_count = len(payroll_results)
+        # ===== 增值税及附加 =====
+        vat_amount = vat5.get("增值税应缴", 0.0) if vat5 else 0.0
+        urban_tax = vat5.get("城建税(7%)", 0.0) if vat5 else 0.0
+        edu_surcharge = vat5.get("教育费附加(3%)", 0.0) if vat5 else 0.0
+        local_edu = vat5.get("地方教育附加(2%)", 0.0) if vat5 else 0.0
+        surcharge_total = vat5.get("附加税合计", 0.0) if vat5 else 0.0
+        vat_note = vat5.get("增值税免税说明", "-") if vat5 else "未计算"
+        six_two_relief = vat5.get("六税两费减免金额", 0.0) if vat5 else 0.0
+        vat_policy = vat5.get("增值税优惠依据", "-") if vat5 else "-"
+        surcharge_policy = vat5.get("附加税优惠说明", "") if vat5 else ""
 
-    # ===== 增值税及附加 =====
-    vat_amount = vat5.get("增值税应缴", 0.0) if vat5 else 0.0
-    urban_tax = vat5.get("城建税(7%)", 0.0) if vat5 else 0.0
-    edu_surcharge = vat5.get("教育费附加(3%)", 0.0) if vat5 else 0.0
-    local_edu = vat5.get("地方教育附加(2%)", 0.0) if vat5 else 0.0
-    surcharge_total = vat5.get("附加税合计", 0.0) if vat5 else 0.0
-    vat_note = vat5.get("增值税免税说明", "-") if vat5 else "未计算"
-    six_two_relief = vat5.get("六税两费减免金额", 0.0) if vat5 else 0.0
-    vat_policy = vat5.get("增值税优惠依据", "-") if vat5 else "-"
-    surcharge_policy = vat5.get("附加税优惠说明", "") if vat5 else ""
+        # ===== 企业所得税 =====
+        corp_tax = r5.get("本期应补(退)税额", 0.0) if r5 else 0.0
+        corp_relief = r5.get("减免所得税额", 0.0) if r5 else 0.0
+        is_small = (r5.get("是否小型微利企业", "否") == "是") if r5 else True
 
-    # ===== 企业所得税 =====
-    corp_tax = r5.get("本期应补(退)税额", 0.0) if r5 else 0.0
-    corp_relief = r5.get("减免所得税额", 0.0) if r5 else 0.0
-    is_small = (r5.get("是否小型微利企业", "否") == "是") if r5 else True
-
-    # ===== 印花税 =====
-    # 资金账簿：注册资本到位 / 增资
-    stamp_reg_capital = st.session_state.get("stamp_reg_capital", 0.0)
-    stamp_capital_increase = st.session_state.get("stamp_capital_increase", 0.0)
-    # 购销合同：按当季收入估算（可视收入为含税购销额）
-    stamp_purchase = vat5.get("季度含税收入", 0.0) if vat5 else 0.0
-    stamp_data = calc_stamp_duty(
-        registered_capital=stamp_reg_capital,
-        capital_increase=stamp_capital_increase,
-        purchase_amount=stamp_purchase,
-        is_small_low_profit=is_small,
-    )
-    stamp_total = stamp_data["印花税合计（应缴）"]
-    stamp_nominal = stamp_data["印花税合计（名义）"]
-    stamp_relief = stamp_data["六税两费减免"]
-
-    # ===== 合计（含印花税）=====
-    total_tax = round(total_personal_tax + vat_amount + surcharge_total + corp_tax + stamp_total, 2)
-
-    # ===== 1. 优惠政策适用清单（先展示） =====
-    st.subheader(f"📋 {disp_year}年第{disp_quarter}季度 — 优惠税率适用说明")
-    st.caption(f"政策依据：湖北省《关于加力助企解难推动中小企业稳健发展的若干措施》（有效期至2027.12.31）")
-
-    # 获取政策汇总
-    revenue_used = st.session_state.get("vat_revenue", r5.get("营业收入", 0.0) if r5 else 0.0)
-    emp_used = r5.get("从业人数", 1) if r5 else 1
-    asset_used = r5.get("资产总额_万元", 0.0) if r5 else 0.0
-
-    policy_summary = get_tax_policy_summary(
-        is_small_scale=(vat5.get("是否小规模纳税人", "是") == "是") if vat5 else True,
-        is_small_low_profit=is_small,
-        quarter_revenue=revenue_used,
-        num_employees=emp_used,
-        total_assets=asset_used,
-        quarter=disp_quarter,
-    )
-
-    for i, p in enumerate(policy_summary["policies"], 1):
-        with st.expander(f"🎯 {p['税种']} — {p['优惠名称']}", expanded=(i == 1)):
-            cols = st.columns([2, 1])
-            with cols[0]:
-                st.markdown(f"""
-- **优惠内容**：{p['优惠内容']}
-- **政策依据**：{p['政策依据']}
-- **适用条件**：{p['适用条件']}
-                """)
-            with cols[1]:
-                st.metric("优惠力度", p['优惠力度'])
-
-    st.success(f"✅ {policy_summary['tip']}")
-    st.info(f"📅 {policy_summary['valid_until']}")
-
-    st.divider()
-
-    # ===== 2. 税款缴纳清单（含优惠标注） =====
-    st.subheader("📋 税款明细清单（含优惠税率标注）")
-
-    # 确定增值税的标称值和优惠说明
-    vat_display_rate = "0%（免税）" if vat_amount == 0 else "1%（优惠后，原3%）"
-    if not (vat5 and vat5.get("是否小规模纳税人") == "是"):
-        vat_display_rate = f"{vat5.get('增值税名义税率', 0.03)*100:.0f}%（一般纳税人）" if vat5 else "-"
-
-    rows = [
-        {
-            "序号": "1",
-            "税款类型": "🏢 增值税",
-            "标称税率": "3%（小规模）",
-            "优惠后税率": vat_display_rate,
-            "适用优惠": "小规模减按1% + 季≤30万免税" if vat_amount == 0 else "小规模减按1%征收",
-            "政策依据": "财税〔2023〕19号",
-            "本期应缴（元）": f"{vat_amount:,.2f}",
-            "状态": "免税 ✅" if vat_amount == 0 else "待缴 ⏳",
-        },
-        {
-            "序号": "2",
-            "税款类型": "🏙️ 城建税",
-            "标称税率": "7%（市区）",
-            "优惠后税率": "3.5%（减半）" if (vat5 and vat5.get("是否享受六税两费减半") == "是") else "7%",
-            "适用优惠": "「六税两费」减半征收" if (vat5 and vat5.get("是否享受六税两费减半") == "是") else "无",
-            "政策依据": "财税〔2022〕10号",
-            "本期应缴（元）": f"{urban_tax:,.2f}",
-            "状态": "免税 ✅" if urban_tax == 0 else "待缴 ⏳",
-        },
-        {
-            "序号": "3",
-            "税款类型": "📚 教育费附加",
-            "标称税率": "3%",
-            "优惠后税率": "1.5%（减半）" if (vat5 and vat5.get("是否享受六税两费减半") == "是") else "3%",
-            "适用优惠": "「六税两费」减半征收",
-            "政策依据": "财税〔2022〕10号",
-            "本期应缴（元）": f"{edu_surcharge:,.2f}",
-            "状态": "免税 ✅" if edu_surcharge == 0 else "待缴 ⏳",
-        },
-        {
-            "序号": "4",
-            "税款类型": "🎓 地方教育附加",
-            "标称税率": "2%",
-            "优惠后税率": "1%（减半）" if (vat5 and vat5.get("是否享受六税两费减半") == "是") else "2%",
-            "适用优惠": "「六税两费」减半征收",
-            "政策依据": "财税〔2022〕10号",
-            "本期应缴（元）": f"{local_edu:,.2f}",
-            "状态": "免税 ✅" if local_edu == 0 else "待缴 ⏳",
-        },
-        {
-            "序号": "5",
-            "税款类型": "💼 企业所得税（季预缴）",
-            "标称税率": "25%",
-            "优惠后税率": "5%（小微优惠）" if is_small else "25%",
-            "适用优惠": "小型微利企业：减按25%计税×20%税率=5%" if is_small else "不适用小微优惠",
-            "政策依据": "财税〔2023〕12号",
-            "本期应缴（元）": f"{corp_tax:,.2f}",
-            "状态": "无需缴纳 ✅" if corp_tax == 0 else "待缴 ⏳",
-        },
-        {
-            "序号": "6",
-            "税款类型": "👤 个人所得税（代扣代缴）",
-            "标称税率": "3%-45%累进",
-            "优惠后税率": "3%-45%（起征点5000元/月）",
-            "适用优惠": f"基本减除5000元+专项附加扣除（{employee_count}名员工）",
-            "政策依据": "个人所得税法",
-            "本期应缴（元）": f"{total_personal_tax:,.2f}",
-            "状态": "无个税 ✅" if total_personal_tax == 0 else "待缴 ⏳",
-        },
-    ]
-
-    # 印花税明细行
-    for si in stamp_data.get("明细", []):
-        rows.append({
-            "序号": f"7-{stamp_data['明细'].index(si)+1}" if len(stamp_data.get("明细", [])) > 1 else "7",
-            "税款类型": f"📜 印花税-{si['税目']}",
-            "标称税率": si["名义税率"],
-            "优惠后税率": si["优惠后税率"],
-            "适用优惠": "「六税两费」减半征收" if stamp_data["是否六税两费减半"] == "是" else "标准税率",
-            "政策依据": "印花税法 + 财税〔2022〕10号",
-            "本期应缴（元）": f"{si['应纳税额（元）']:,.2f}",
-            "状态": "免税 ✅" if si['应纳税额（元）'] == 0 else "待缴 ⏳",
-        })
-
-    if stamp_data["税目数量"] == 0:
-        rows.append({
-            "序号": "7",
-            "税款类型": "📜 印花税",
-            "标称税率": "见各税目",
-            "优惠后税率": "六税两费减半",
-            "适用优惠": "小型微利 → 各税目减半",
-            "政策依据": "印花税法（2022.7.1）",
-            "本期应缴（元）": "0.00",
-            "状态": "本季无需缴纳 ✅",
-        })
-
-    df_tax_list = pd.DataFrame(rows)
-    st.dataframe(
-        df_tax_list.style.apply(
-            lambda row: ["background-color: #e8f5e9" if "免税" in str(row["状态"]) or "无需缴纳" in str(row["状态"]) else
-                         ("background-color: #fff9c4" if "待缴" in str(row["状态"]) else "")
-                         for _ in row],
-            axis=1
-        ),
-        use_container_width=True,
-        hide_index=True,
-    )
-
-    st.caption("🟢 绿色行 = 享受优惠后无需缴纳 | 🟡 黄色行 = 需按期缴纳")
-
-    # ===== 3. 六税两费减半明细 =====
-    if six_two_relief > 0 or stamp_relief > 0:
-        st.divider()
-        st.subheader("🎁 「六税两费」减半征收 — 本季减免明细")
-        col_count = 3 + (1 if stamp_relief > 0 else 0)
-        relief_cols = st.columns(col_count)
-        relief_idx = 0
-        relief_cols[relief_idx].metric("城建税减免", f"{vat5.get('城建税名义', 0) - urban_tax:,.2f} 元"); relief_idx += 1
-        relief_cols[relief_idx].metric("教育费附加减免", f"{vat5.get('教育费附加名义', 0) - edu_surcharge:,.2f} 元"); relief_idx += 1
-        relief_cols[relief_idx].metric("地方教育附加减免", f"{vat5.get('地方教育附加名义', 0) - local_edu:,.2f} 元"); relief_idx += 1
-        if stamp_relief > 0:
-            relief_cols[relief_idx].metric("印花税减免", f"{stamp_relief:,.2f} 元")
-        st.success(f"💰 本季「六税两费」合计减免：**{six_two_relief + stamp_relief:,.2f} 元**")
-
-    # ===== 4. 汇总指标卡 =====
-    st.divider()
-    st.subheader("💰 本期税款汇总（优惠后）")
-
-    mc1, mc2, mc3, mc4, mc5 = st.columns(5)
-    mc1.metric(
-        "增值税及附加",
-        f"{round(vat_amount + surcharge_total, 2):,.2f} 元",
-        delta="全部免税" if vat_amount == 0 else None,
-    )
-    mc2.metric(
-        "企业所得税",
-        f"{corp_tax:,.2f} 元",
-        delta=f"减免 {corp_relief:,.0f} 元" if corp_relief > 0 else ("亏损无需缴纳" if corp_tax == 0 else None),
-    )
-    mc3.metric(
-        "个人所得税",
-        f"{total_personal_tax:,.2f} 元",
-        delta=f"{employee_count}名员工" if employee_count > 0 else None,
-    )
-    mc4.metric(
-        "📜 印花税",
-        f"{stamp_total:,.2f} 元",
-        delta=f"减免 {stamp_relief:,.0f} 元" if stamp_relief > 0 else "本季无需缴纳",
-    )
-    mc5.metric(
-        "🔴 本期税款合计",
-        f"{total_tax:,.2f} 元",
-        delta=f"六税两费减免 {six_two_relief + stamp_relief:,.0f}" if (six_two_relief + stamp_relief) > 0 else None,
-    )
-
-    # ===== 5. 社保提醒 =====
-    if total_company_social > 0 or total_personal_social > 0:
-        st.divider()
-        st.subheader("🛡️ 社保缴费提醒（非税款，单独缴纳）")
-        s1, s2, s3 = st.columns(3)
-        s1.metric("公司承担社保", f"{total_company_social:,.2f} 元")
-        s2.metric("个人承担社保", f"{total_personal_social:,.2f} 元")
-        s3.metric("社保合计", f"{total_company_social + total_personal_social:,.2f} 元")
-        st.info("💡 社保缴费请登录**武汉市社会保险网上服务平台**或通过银行代扣完成，截止日期一般为当月25日。")
-
-    # ===== 6. 残保金 =====
-    if employee_count <= 30:
-        st.divider()
-        st.subheader("♿ 残疾人就业保障金")
-        st.success(f"✅ 在职职工 {employee_count} 人 ≤ 30人 → **免征残疾人就业保障金**（发改价格规〔2019〕2015号）")
-
-    # ===== 7. 缴款期限 =====
-    st.divider()
-    st.subheader("⏰ 缴款期限提醒")
-
-    q_end_month = {1: 3, 2: 6, 3: 9, 4: 12}
-    deadline_month = q_end_month.get(disp_quarter, 3) + 1
-    if deadline_month > 12:
-        deadline_month = 1
-        deadline_year = disp_year + 1
-    else:
-        deadline_year = disp_year
-
-    st.markdown(f"""
-| 税种 | 优惠政策 | 实际税率 | 申报截止日期 | 申报平台 |
-|------|---------|---------|------------|---------|
-| 增值税 | 小规模减按1% | {vat_display_rate} | **{deadline_year}年{deadline_month}月15日** | 湖北省电子税务局 |
-| 城建税 | 六税两费减半 | 3.5% | 同上 | 随增值税一并申报 |
-| 教育费附加+地方教育附加 | 六税两费减半 | 1.5%+1% | 同上 | 随增值税一并申报 |
-| 企业所得税 | 小型微利5% | {'5%' if is_small else '25%'} | **{deadline_year}年{deadline_month}月15日** | 电子税务局 → A200000 |
-| 个人所得税 | 起征点5000 | 3%-45% | **次月15日** | 自然人税收管理系统 |
-| 印花税 | 六税两费减半 | 各税目减半 | 按次/按期汇总 | 湖北省电子税务局 |
-| 残保金 | ≤30人免征 | 0% | 年度申报 | 残联/税务部门 |
-    """)
-
-    st.markdown("""
-> **📌 操作步骤：**
-> 1. 登录 [湖北省电子税务局](https://etax.hubei.chinatax.gov.cn/) 完成增值税及企业所得税申报
-> 2. 申报完成后，通过网银或第三方支付完成税款划缴
-> 3. 截图留存申报成功页面，归入税务档案
-> 4. 个税通过**自然人税收管理系统（扣缴客户端）**申报并缴纳
-> 5. 优惠政策**无需额外申请**，系统自动识别减免（湖北省「免申即享」）
-    """)
-
-    # ===== 8. 下载 =====
-    st.divider()
-    dl1, dl2 = st.columns(2)
-    with dl1:
-        csv_tax = df_tax_list.to_csv(index=False, encoding="utf-8-sig")
-        st.download_button(
-            label="📥 下载税款缴纳清单（CSV）",
-            data=csv_tax,
-            file_name=f"税款缴纳清单_{disp_year}Q{disp_quarter}.csv",
-            mime="text/csv",
-            use_container_width=True,
+        # ===== 印花税 =====
+        # 资金账簿：注册资本到位 / 增资
+        stamp_reg_capital = st.session_state.get("stamp_reg_capital", 0.0)
+        stamp_capital_increase = st.session_state.get("stamp_capital_increase", 0.0)
+        # 购销合同：按当季收入估算（可视收入为含税购销额）
+        stamp_purchase = vat5.get("季度含税收入", 0.0) if vat5 else 0.0
+        stamp_data = calc_stamp_duty(
+            registered_capital=stamp_reg_capital,
+            capital_increase=stamp_capital_increase,
+            purchase_amount=stamp_purchase,
+            is_small_low_profit=is_small,
         )
-    with dl2:
-        summary_lines = [
-            f"武汉金艳龙科技有限公司",
-            f"{disp_year}年第{disp_quarter}季度 税款缴纳清单（含优惠政策）",
-            f"生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M')}",
-            "=" * 50,
-            f"▶ 适用优惠政策：",
-            f"  1. 小规模纳税人季度免税/减按1%（季≤30万免，超则1%）",
-            f"  2. 六税两费减半征收（城建/教育/地方教育/印花税）",
-            f"  3. 小型微利企业所得税5%（年利润≤300万）",
-            f"  4. 残保金免征（员工≤30人）",
-            "=" * 50,
-            f"▶ 本期实际应缴：",
-            f"  增值税：{vat_amount:,.2f} 元 ({vat_display_rate})",
-            f"  城建税：{urban_tax:,.2f} 元 (3.5%)",
-            f"  教育费附加：{edu_surcharge:,.2f} 元 (1.5%)",
-            f"  地方教育附加：{local_edu:,.2f} 元 (1%)",
-            f"  企业所得税：{corp_tax:,.2f} 元 ({'5%' if is_small else '25%'})",
-            f"  个人所得税：{total_personal_tax:,.2f} 元",
-            f"  印花税：{stamp_total:,.2f} 元（含资金账簿/购销合同等，减半后）",
-            "-" * 30,
-            f"  本期税款合计：{total_tax:,.2f} 元",
-            f"  六税两费减免（含印花税）：{six_two_relief + stamp_relief:,.2f} 元",
-            f"  企业所得税减免：{corp_relief:,.2f} 元",
-            "=" * 50,
-            f"申报截止：{deadline_year}年{deadline_month}月15日（增值税、企业所得税）",
-            f"个税截止：次月15日",
-            f"社保截止：当月25日",
-            f"印花税：按次或按期汇总申报",
-            f"政策有效期至：2027年12月31日",
+        stamp_total = stamp_data["印花税合计（应缴）"]
+        stamp_nominal = stamp_data["印花税合计（名义）"]
+        stamp_relief = stamp_data["六税两费减免"]
+
+        # ===== 合计（含印花税）=====
+        total_tax = round(total_personal_tax + vat_amount + surcharge_total + corp_tax + stamp_total, 2)
+
+        # ===== 1. 优惠政策适用清单（先展示） =====
+        st.subheader(f"📋 {disp_year}年第{disp_quarter}季度 — 优惠税率适用说明")
+        st.caption(f"政策依据：湖北省《关于加力助企解难推动中小企业稳健发展的若干措施》（有效期至2027.12.31）")
+
+        # 获取政策汇总
+        revenue_used = st.session_state.get("vat_revenue", r5.get("营业收入", 0.0) if r5 else 0.0)
+        emp_used = r5.get("从业人数", 1) if r5 else 1
+        asset_used = r5.get("资产总额_万元", 0.0) if r5 else 0.0
+
+        policy_summary = get_tax_policy_summary(
+            is_small_scale=(vat5.get("是否小规模纳税人", "是") == "是") if vat5 else True,
+            is_small_low_profit=is_small,
+            quarter_revenue=revenue_used,
+            num_employees=emp_used,
+            total_assets=asset_used,
+            quarter=disp_quarter,
+        )
+
+        for i, p in enumerate(policy_summary["policies"], 1):
+            with st.expander(f"🎯 {p['税种']} — {p['优惠名称']}", expanded=(i == 1)):
+                cols = st.columns([2, 1])
+                with cols[0]:
+                    st.markdown(f"""
+    - **优惠内容**：{p['优惠内容']}
+    - **政策依据**：{p['政策依据']}
+    - **适用条件**：{p['适用条件']}
+                    """)
+                with cols[1]:
+                    st.metric("优惠力度", p['优惠力度'])
+
+        st.success(f"✅ {policy_summary['tip']}")
+        st.info(f"📅 {policy_summary['valid_until']}")
+
+        st.divider()
+
+        # ===== 2. 税款缴纳清单（含优惠标注） =====
+        st.subheader("📋 税款明细清单（含优惠税率标注）")
+
+        # 确定增值税的标称值和优惠说明
+        vat_display_rate = "0%（免税）" if vat_amount == 0 else "1%（优惠后，原3%）"
+        if not (vat5 and vat5.get("是否小规模纳税人") == "是"):
+            vat_display_rate = f"{vat5.get('增值税名义税率', 0.03)*100:.0f}%（一般纳税人）" if vat5 else "-"
+
+        rows = [
+            {
+                "序号": "1",
+                "税款类型": "🏢 增值税",
+                "标称税率": "3%（小规模）",
+                "优惠后税率": vat_display_rate,
+                "适用优惠": "小规模减按1% + 季≤30万免税" if vat_amount == 0 else "小规模减按1%征收",
+                "政策依据": "财税〔2023〕19号",
+                "本期应缴（元）": f"{vat_amount:,.2f}",
+                "状态": "免税 ✅" if vat_amount == 0 else "待缴 ⏳",
+            },
+            {
+                "序号": "2",
+                "税款类型": "🏙️ 城建税",
+                "标称税率": "7%（市区）",
+                "优惠后税率": "3.5%（减半）" if (vat5 and vat5.get("是否享受六税两费减半") == "是") else "7%",
+                "适用优惠": "「六税两费」减半征收" if (vat5 and vat5.get("是否享受六税两费减半") == "是") else "无",
+                "政策依据": "财税〔2022〕10号",
+                "本期应缴（元）": f"{urban_tax:,.2f}",
+                "状态": "免税 ✅" if urban_tax == 0 else "待缴 ⏳",
+            },
+            {
+                "序号": "3",
+                "税款类型": "📚 教育费附加",
+                "标称税率": "3%",
+                "优惠后税率": "1.5%（减半）" if (vat5 and vat5.get("是否享受六税两费减半") == "是") else "3%",
+                "适用优惠": "「六税两费」减半征收",
+                "政策依据": "财税〔2022〕10号",
+                "本期应缴（元）": f"{edu_surcharge:,.2f}",
+                "状态": "免税 ✅" if edu_surcharge == 0 else "待缴 ⏳",
+            },
+            {
+                "序号": "4",
+                "税款类型": "🎓 地方教育附加",
+                "标称税率": "2%",
+                "优惠后税率": "1%（减半）" if (vat5 and vat5.get("是否享受六税两费减半") == "是") else "2%",
+                "适用优惠": "「六税两费」减半征收",
+                "政策依据": "财税〔2022〕10号",
+                "本期应缴（元）": f"{local_edu:,.2f}",
+                "状态": "免税 ✅" if local_edu == 0 else "待缴 ⏳",
+            },
+            {
+                "序号": "5",
+                "税款类型": "💼 企业所得税（季预缴）",
+                "标称税率": "25%",
+                "优惠后税率": "5%（小微优惠）" if is_small else "25%",
+                "适用优惠": "小型微利企业：减按25%计税×20%税率=5%" if is_small else "不适用小微优惠",
+                "政策依据": "财税〔2023〕12号",
+                "本期应缴（元）": f"{corp_tax:,.2f}",
+                "状态": "无需缴纳 ✅" if corp_tax == 0 else "待缴 ⏳",
+            },
+            {
+                "序号": "6",
+                "税款类型": "👤 个人所得税（代扣代缴）",
+                "标称税率": "3%-45%累进",
+                "优惠后税率": "3%-45%（起征点5000元/月）",
+                "适用优惠": f"基本减除5000元+专项附加扣除（{employee_count}名员工）",
+                "政策依据": "个人所得税法",
+                "本期应缴（元）": f"{total_personal_tax:,.2f}",
+                "状态": "无个税 ✅" if total_personal_tax == 0 else "待缴 ⏳",
+            },
         ]
-        summary_txt = "\n".join(summary_lines)
-        st.download_button(
-            label="📥 下载缴纳通知书（TXT）",
-            data=summary_txt,
-            file_name=f"税款缴纳通知书_{disp_year}Q{disp_quarter}.txt",
-            mime="text/plain",
+
+        # 印花税明细行
+        for si in stamp_data.get("明细", []):
+            rows.append({
+                "序号": f"7-{stamp_data['明细'].index(si)+1}" if len(stamp_data.get("明细", [])) > 1 else "7",
+                "税款类型": f"📜 印花税-{si['税目']}",
+                "标称税率": si["名义税率"],
+                "优惠后税率": si["优惠后税率"],
+                "适用优惠": "「六税两费」减半征收" if stamp_data["是否六税两费减半"] == "是" else "标准税率",
+                "政策依据": "印花税法 + 财税〔2022〕10号",
+                "本期应缴（元）": f"{si['应纳税额（元）']:,.2f}",
+                "状态": "免税 ✅" if si['应纳税额（元）'] == 0 else "待缴 ⏳",
+            })
+
+        if stamp_data["税目数量"] == 0:
+            rows.append({
+                "序号": "7",
+                "税款类型": "📜 印花税",
+                "标称税率": "见各税目",
+                "优惠后税率": "六税两费减半",
+                "适用优惠": "小型微利 → 各税目减半",
+                "政策依据": "印花税法（2022.7.1）",
+                "本期应缴（元）": "0.00",
+                "状态": "本季无需缴纳 ✅",
+            })
+
+        df_tax_list = pd.DataFrame(rows)
+        st.dataframe(
+            df_tax_list.style.apply(
+                lambda row: ["background-color: #e8f5e9" if "免税" in str(row["状态"]) or "无需缴纳" in str(row["状态"]) else
+                             ("background-color: #fff9c4" if "待缴" in str(row["状态"]) else "")
+                             for _ in row],
+                axis=1
+            ),
             use_container_width=True,
+            hide_index=True,
         )
 
-# ===============================================
-#  Tab6：申报指南（四合一）
-# ===============================================
+        st.caption("🟢 绿色行 = 享受优惠后无需缴纳 | 🟡 黄色行 = 需按期缴纳")
+
+        # ===== 3. 六税两费减半明细 =====
+        if six_two_relief > 0 or stamp_relief > 0:
+            st.divider()
+            st.subheader("🎁 「六税两费」减半征收 — 本季减免明细")
+            col_count = 3 + (1 if stamp_relief > 0 else 0)
+            relief_cols = st.columns(col_count)
+            relief_idx = 0
+            relief_cols[relief_idx].metric("城建税减免", f"{vat5.get('城建税名义', 0) - urban_tax:,.2f} 元"); relief_idx += 1
+            relief_cols[relief_idx].metric("教育费附加减免", f"{vat5.get('教育费附加名义', 0) - edu_surcharge:,.2f} 元"); relief_idx += 1
+            relief_cols[relief_idx].metric("地方教育附加减免", f"{vat5.get('地方教育附加名义', 0) - local_edu:,.2f} 元"); relief_idx += 1
+            if stamp_relief > 0:
+                relief_cols[relief_idx].metric("印花税减免", f"{stamp_relief:,.2f} 元")
+            st.success(f"💰 本季「六税两费」合计减免：**{six_two_relief + stamp_relief:,.2f} 元**")
+
+        # ===== 4. 汇总指标卡 =====
+        st.divider()
+        st.subheader("💰 本期税款汇总（优惠后）")
+
+        mc1, mc2, mc3, mc4, mc5 = st.columns(5)
+        mc1.metric(
+            "增值税及附加",
+            f"{round(vat_amount + surcharge_total, 2):,.2f} 元",
+            delta="全部免税" if vat_amount == 0 else None,
+        )
+        mc2.metric(
+            "企业所得税",
+            f"{corp_tax:,.2f} 元",
+            delta=f"减免 {corp_relief:,.0f} 元" if corp_relief > 0 else ("亏损无需缴纳" if corp_tax == 0 else None),
+        )
+        mc3.metric(
+            "个人所得税",
+            f"{total_personal_tax:,.2f} 元",
+            delta=f"{employee_count}名员工" if employee_count > 0 else None,
+        )
+        mc4.metric(
+            "📜 印花税",
+            f"{stamp_total:,.2f} 元",
+            delta=f"减免 {stamp_relief:,.0f} 元" if stamp_relief > 0 else "本季无需缴纳",
+        )
+        mc5.metric(
+            "🔴 本期税款合计",
+            f"{total_tax:,.2f} 元",
+            delta=f"六税两费减免 {six_two_relief + stamp_relief:,.0f}" if (six_two_relief + stamp_relief) > 0 else None,
+        )
+
+        # ===== 5. 社保提醒 =====
+        if total_company_social > 0 or total_personal_social > 0:
+            st.divider()
+            st.subheader("🛡️ 社保缴费提醒（非税款，单独缴纳）")
+            s1, s2, s3 = st.columns(3)
+            s1.metric("公司承担社保", f"{total_company_social:,.2f} 元")
+            s2.metric("个人承担社保", f"{total_personal_social:,.2f} 元")
+            s3.metric("社保合计", f"{total_company_social + total_personal_social:,.2f} 元")
+            st.info("💡 社保缴费请登录**武汉市社会保险网上服务平台**或通过银行代扣完成，截止日期一般为当月25日。")
+
+        # ===== 6. 残保金 =====
+        if employee_count <= 30:
+            st.divider()
+            st.subheader("♿ 残疾人就业保障金")
+            st.success(f"✅ 在职职工 {employee_count} 人 ≤ 30人 → **免征残疾人就业保障金**（发改价格规〔2019〕2015号）")
+
+        # ===== 7. 缴款期限 =====
+        st.divider()
+        st.subheader("⏰ 缴款期限提醒")
+
+        q_end_month = {1: 3, 2: 6, 3: 9, 4: 12}
+        deadline_month = q_end_month.get(disp_quarter, 3) + 1
+        if deadline_month > 12:
+            deadline_month = 1
+            deadline_year = disp_year + 1
+        else:
+            deadline_year = disp_year
+
+        st.markdown(f"""
+    | 税种 | 优惠政策 | 实际税率 | 申报截止日期 | 申报平台 |
+    |------|---------|---------|------------|---------|
+    | 增值税 | 小规模减按1% | {vat_display_rate} | **{deadline_year}年{deadline_month}月15日** | 湖北省电子税务局 |
+    | 城建税 | 六税两费减半 | 3.5% | 同上 | 随增值税一并申报 |
+    | 教育费附加+地方教育附加 | 六税两费减半 | 1.5%+1% | 同上 | 随增值税一并申报 |
+    | 企业所得税 | 小型微利5% | {'5%' if is_small else '25%'} | **{deadline_year}年{deadline_month}月15日** | 电子税务局 → A200000 |
+    | 个人所得税 | 起征点5000 | 3%-45% | **次月15日** | 自然人税收管理系统 |
+    | 印花税 | 六税两费减半 | 各税目减半 | 按次/按期汇总 | 湖北省电子税务局 |
+    | 残保金 | ≤30人免征 | 0% | 年度申报 | 残联/税务部门 |
+        """)
+
+        st.markdown("""
+    > **📌 操作步骤：**
+    > 1. 登录 [湖北省电子税务局](https://etax.hubei.chinatax.gov.cn/) 完成增值税及企业所得税申报
+    > 2. 申报完成后，通过网银或第三方支付完成税款划缴
+    > 3. 截图留存申报成功页面，归入税务档案
+    > 4. 个税通过**自然人税收管理系统（扣缴客户端）**申报并缴纳
+    > 5. 优惠政策**无需额外申请**，系统自动识别减免（湖北省「免申即享」）
+        """)
+
+        # ===== 8. 下载 =====
+        st.divider()
+        dl1, dl2 = st.columns(2)
+        with dl1:
+            csv_tax = df_tax_list.to_csv(index=False, encoding="utf-8-sig")
+            st.download_button(
+                label="📥 下载税款缴纳清单（CSV）",
+                data=csv_tax,
+                file_name=f"税款缴纳清单_{disp_year}Q{disp_quarter}.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+        with dl2:
+            summary_lines = [
+                f"武汉金艳龙科技有限公司",
+                f"{disp_year}年第{disp_quarter}季度 税款缴纳清单（含优惠政策）",
+                f"生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M')}",
+                "=" * 50,
+                f"▶ 适用优惠政策：",
+                f"  1. 小规模纳税人季度免税/减按1%（季≤30万免，超则1%）",
+                f"  2. 六税两费减半征收（城建/教育/地方教育/印花税）",
+                f"  3. 小型微利企业所得税5%（年利润≤300万）",
+                f"  4. 残保金免征（员工≤30人）",
+                "=" * 50,
+                f"▶ 本期实际应缴：",
+                f"  增值税：{vat_amount:,.2f} 元 ({vat_display_rate})",
+                f"  城建税：{urban_tax:,.2f} 元 (3.5%)",
+                f"  教育费附加：{edu_surcharge:,.2f} 元 (1.5%)",
+                f"  地方教育附加：{local_edu:,.2f} 元 (1%)",
+                f"  企业所得税：{corp_tax:,.2f} 元 ({'5%' if is_small else '25%'})",
+                f"  个人所得税：{total_personal_tax:,.2f} 元",
+                f"  印花税：{stamp_total:,.2f} 元（含资金账簿/购销合同等，减半后）",
+                "-" * 30,
+                f"  本期税款合计：{total_tax:,.2f} 元",
+                f"  六税两费减免（含印花税）：{six_two_relief + stamp_relief:,.2f} 元",
+                f"  企业所得税减免：{corp_relief:,.2f} 元",
+                "=" * 50,
+                f"申报截止：{deadline_year}年{deadline_month}月15日（增值税、企业所得税）",
+                f"个税截止：次月15日",
+                f"社保截止：当月25日",
+                f"印花税：按次或按期汇总申报",
+                f"政策有效期至：2027年12月31日",
+            ]
+            summary_txt = "\n".join(summary_lines)
+            st.download_button(
+                label="📥 下载缴纳通知书（TXT）",
+                data=summary_txt,
+                file_name=f"税款缴纳通知书_{disp_year}Q{disp_quarter}.txt",
+                mime="text/plain",
+                use_container_width=True,
+            )
+
+    # ===============================================
+    #  Tab6：申报指南（四合一）
+    # ===============================================
 
 with tab8:
     st.header("📖 武汉金艳龙科技有限公司 — 税务申报操作指南")
@@ -3957,7 +3956,7 @@ with tab6:
 with tab1:
     st.header("🗂️ 年报数据导入")
     st.caption("支持 Excel / PDF 两种格式。导入后年报数据自动拆分为 4 个季度申报底稿。税务年报与内部底稿不一致时，重新导入即可纠偏。")
-    st.success("✅ v1.6.4 — 年报导入模块已就绪（2026-06-03 build）")
+    st.success("✅ v1.6.5 — 年报导入模块已就绪（2026-06-03 build）")
 
     # ── 检查是否有历史导入 ──
     snapshot_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "年报导入快照.json")
