@@ -32,6 +32,9 @@ from tax_calculator import (
     BASIC_DEDUCTION,
     calc_corporate_income_tax_quarterly,
     format_corporate_tax_report,
+    classify_bank_transaction,
+    generate_profit_statement,
+    validate_quarterly_declaration,
 )
 
 # ===============================================
@@ -820,40 +823,73 @@ with tab4:
                 df_txns = pd.DataFrame(all_txns)
                 st.success(f"✅ 成功读取 {len(df_txns)} 条交易记录")
 
-                # 简单分类（根据关键词）
-                def classify_txn(desc):
-                    desc = str(desc).lower()
-                    if any(k in desc for k in ["货款", "收入", "销售", "服务费", "咨询费", "收款"]):
-                        return "营业收入"
-                    elif any(k in desc for k in ["工资", "社保", "公积金", "福利"]):
-                        return "管理费用-人工"
-                    elif any(k in desc for k in ["水电", "物业", "房租", "租赁"]):
-                        return "管理费用-办公"
-                    elif any(k in desc for k in ["采购", "进货", "成本", "材料"]):
-                        return "营业成本"
-                    elif any(k in desc for k in ["报销", "差旅", "交通", "餐饮", "办公用品"]):
-                        return "管理费用-其他"
-                    elif any(k in desc for k in ["税", "费"]):
-                        return "税金及附加"
-                    else:
-                        return "待分类"
-
-                df_txns["自动分类"] = df_txns["摘要"].apply(classify_txn)
-                st.dataframe(df_txns[["日期", "摘要", "收入金额", "支出金额", "自动分类"]].head(10), use_container_width=True)
+                # 使用优化后的分类函数（遵循小企业会计准则）
+                df_txns["自动分类"] = df_txns["摘要"].apply(
+                    lambda x: classify_bank_transaction(x)["category"]
+                )
+                df_txns["会计科目"] = df_txns["摘要"].apply(
+                    lambda x: classify_bank_transaction(x)["account"]
+                )
+                df_txns["利润表项目"] = df_txns["摘要"].apply(
+                    lambda x: classify_bank_transaction(x)["pl_item"]
+                )
+                
+                st.dataframe(
+                    df_txns[["日期", "摘要", "收入金额", "支出金额", "自动分类", "利润表项目"]].head(10), 
+                    use_container_width=True
+                )
 
                 st.subheader("请确认交易分类（可手动修改）")
                 edited_df = st.data_editor(
-                    df_txns[["日期", "摘要", "收入金额", "支出金额", "自动分类"]],
+                    df_txns[["日期", "摘要", "收入金额", "支出金额", "自动分类", "利润表项目"]],
                     use_container_width=True,
                     num_rows="dynamic",
                     key="txn_editor",
                 )
 
-                # 计算汇总
-                revenue_total = edited_df[edited_df["自动分类"] == "营业收入"]["收入金额"].sum()
-                cost_total = edited_df[edited_df["自动分类"] == "营业成本"]["支出金额"].sum()
-                expense_total = edited_df[edited_df["自动分类"].str.contains("管理费用", na=False)]["支出金额"].sum()
-                profit = revenue_total - cost_total - expense_total
+                # 生成利润表预览
+                st.subheader("📊 自动生成利润表（小企业会计准则）")
+                profit_data = generate_profit_statement(edited_df)
+                
+                profit_df = pd.DataFrame({
+                    "利润表项目": [
+                        "一、营业收入（第1行）",
+                        "减：营业成本（第2行）",
+                        "    税金及附加（第3行）",
+                        "    管理费用（第5行）",
+                        "    财务费用（第6行）",
+                        "    资产减值损失（第7行）",
+                        "加：投资收益（第8行）",
+                        "二、营业利润（第9行）",
+                        "加：营业外收入（第10行）",
+                        "减：营业外支出（第11行）",
+                        "三、利润总额（第12行）",
+                        "减：所得税费用（第13行）",
+                        "四、净利润（第14行）",
+                    ],
+                    "本期金额": [
+                        f"{profit_data['营业收入']:,.2f}",
+                        f"{profit_data['营业成本']:,.2f}",
+                        f"{profit_data['税金及附加']:,.2f}",
+                        f"{profit_data['管理费用']:,.2f}",
+                        f"{profit_data['财务费用']:,.2f}",
+                        "0.00",
+                        f"{profit_data['投资收益']:,.2f}",
+                        f"{profit_data['营业利润']:,.2f}",
+                        f"{profit_data['营业外收入']:,.2f}",
+                        f"{profit_data['营业外支出']:,.2f}",
+                        f"{profit_data['利润总额']:,.2f}",
+                        f"{profit_data['所得税费用']:,.2f}",
+                        f"{profit_data['净利润']:,.2f}",
+                    ]
+                })
+                st.dataframe(profit_df, use_container_width=True, hide_index=True)
+                st.caption("💡 利润表根据《小企业会计准则》生成，可与申报表第1~3行交叉校验")
+
+                # 计算汇总（用于填入申报表）
+                revenue_total = profit_data["营业收入"]
+                cost_total = profit_data["营业成本"]
+                profit = profit_data["利润总额"]
 
                 st.subheader("📈 自动汇总结果（本期）")
                 col_a, col_b, col_c, col_d = st.columns(4)
@@ -866,6 +902,7 @@ with tab4:
                     st.session_state["auto_revenue"] = revenue_total
                     st.session_state["auto_cost"] = cost_total
                     st.session_state["auto_profit"] = profit
+                    st.session_state["profit_data"] = profit_data  # 保存利润表数据
                     st.success("✅ 已自动填入申报表，请向下滚动确认数据！")
                     st.rerun()
 
@@ -913,9 +950,16 @@ with tab4:
     st.divider()
 
     if st.button("🚀 计算季度预缴税额", use_container_width=True, type="primary"):
+        # 计算本年累计已预缴税额（第12行）
+        tax_paid_ytd = 0.0
+        for q in range(1, quarter):
+            if str(q) in prev_saved:
+                tax_paid_ytd += prev_saved[str(q)].get("tax_payable", 0)
+
         result = calc_corporate_income_tax_quarterly(
             revenue, cost, period_profit, ytd_profit,
             int(num_employees), total_assets,
+            tax_paid_ytd=tax_paid_ytd,
         )
         st.session_state["corp_tax_result"] = result
 
@@ -935,28 +979,89 @@ with tab4:
 
         st.success(f"✅ 计算完成！Q{quarter} 数据已保存，下次申报 Q{quarter+1} 时会自动加载。")
 
-    # ========== 计算结果展示 ==========
+    # ========== 计算结果展示（匹配 A200000 申报表格式）==========
     if "corp_tax_result" in st.session_state:
         r = st.session_state["corp_tax_result"]
 
-        st.subheader("📈 计算结果")
-        m1, m2, m3 = st.columns(3)
-        m1.metric("季度利润总额", f"{r['利润总额']:.2f} 元")
-        m2.metric("应纳税所得额", f"{r['应纳税所得额']:.2f} 元")
-        m3.metric("本期应纳税额", f"{r['本期应纳税额']:.2f} 元")
+        st.subheader("📋 申报表预览（A200000格式）")
 
-        # 详细结果表格
-        df_corp = pd.DataFrame([r])
-        numeric_cols = df_corp.select_dtypes(include=["float64", "int64"]).columns
-        st.dataframe(
-            df_corp.style.format("{:.2f}", subset=numeric_cols),
-            use_container_width=True,
-        )
+        # 第一区域：收入成本利润（第1~3行）
+        st.markdown("**第一部分：收入、成本、利润**")
+        form_df_1 = pd.DataFrame({
+            "行次": ["第1行", "第2行", "第3行"],
+            "项目": ["营业收入", "营业成本", "利润总额"],
+            "本期金额": [f"{r['营业收入']:,.2f}", f"{r['营业成本']:,.2f}", f"{r['利润总额']:,.2f}"],
+            "累计金额": [f"{ytd_revenue:,.2f}", f"{ytd_cost:,.2f}", f"{ytd_profit:,.2f}"],
+        })
+        st.dataframe(form_df_1, use_container_width=True, hide_index=True)
+
+        # 第二区域：应纳税所得额计算（第4~8行）
+        st.markdown("**第二部分：应纳税所得额计算**")
+        form_df_2 = pd.DataFrame({
+            "行次": ["第4行", "第5行", "第6行", "第7行", "第8行"],
+            "项目": ["特定业务调整", "不征税收入", "固定资产折旧调整", "弥补以前年度亏损", "实际利润额"],
+            "本期金额": ["0.00", "0.00", "0.00", "0.00", f"{r['实际利润额']:,.2f}"],
+            "累计金额": ["0.00", "0.00", "0.00", "0.00", f"{ytd_profit:,.2f}"],
+        })
+        st.dataframe(form_df_2, use_container_width=True, hide_index=True)
+
+        # 第三区域：税款计算（第9~13行）
+        st.markdown("**第三部分：税款计算**")
+        form_df_3 = pd.DataFrame({
+            "行次": ["第9行", "第10行", "第11行", "第12行", "第13行"],
+            "项目": ["税率(25%)", "应纳所得税额", "减免所得税额", "本年累计已预缴", "本期应补(退)税额"],
+            "本期金额": [
+                "25%",
+                f"{r['应纳税额_标准']:,.2f}",
+                f"{r['减免所得税额']:,.2f}",
+                f"{r['本年累计已预缴']:,.2f}",
+                f"{r['本期应补(退)税额']:,.2f}",
+            ],
+        })
+        st.dataframe(form_df_3, use_container_width=True, hide_index=True)
+
+        # ===== 数据校验（利润表 vs 申报表）=====
+        if "profit_data" in st.session_state:
+            profit_data = st.session_state["profit_data"]
+            validation = validate_quarterly_declaration(
+                profit_data, 
+                r["营业收入"], 
+                r["营业成本"], 
+                r["利润总额"]
+            )
+            
+            st.subheader("📋 数据校验结果")
+            all_pass = True
+            for passed, msg in validation:
+                if passed:
+                    st.success(f"✅ {msg}")
+                else:
+                    st.error(f"⚠️ {msg}")
+                    all_pass = False
+            
+            if all_pass:
+                st.success("🎉 所有校验通过！利润表与申报表数据一致。")
+            else:
+                st.warning("⚠️ 请检查银行流水分类是否正确，或手动调整申报表数据。")
+
+        # 关键指标卡片
+        st.subheader("📊 关键指标")
+        k1, k2, k3 = st.columns(3)
+        k1.metric("实际利润额", f"{r['实际利润额']:,.2f} 元")
+        k2.metric("本期应纳税额", f"{r['本期应纳税额']:,.2f} 元")
+        k3.metric("本期应补(退)税额", f"{r['本期应补(退)税额']:,.2f} 元")
+
+        # 判断状态
+        if r['利润总额'] <= 0:
+            st.info("📌 本期亏损，无需缴纳企业所得税。减免所得税额和应补退税额均为0。")
+        else:
+            if r['是否小型微利企业'] == '是':
+                st.success(f"📌 小型微利企业优惠已生效：实际税负仅5%（标准25%，减免{r['减免所得税额']:,.2f}元）")
 
         # AI 申报说明
         st.subheader("📄 申报说明")
         report_text = format_corporate_tax_report(r, quarter, year)
-        st.text_area("申报说明", report_text, height=350, key="corp_tax_area")
+        st.text_area("申报说明", report_text, height=400, key="corp_tax_area")
 
         # 下载
         col_dl1, col_dl2 = st.columns(2)
@@ -969,7 +1074,7 @@ with tab4:
                 use_container_width=True,
             )
         with col_dl2:
-            csv_corp = df_corp.to_csv(index=False, encoding="utf-8-sig")
+            csv_corp = pd.DataFrame([r]).to_csv(index=False, encoding="utf-8-sig")
             st.download_button(
                 label="📥 下载申报底稿（CSV）",
                 data=csv_corp,

@@ -238,23 +238,28 @@ def calc_corporate_income_tax_quarterly(
     ytd_profit: float,
     num_employees: int,
     total_assets: float,
+    tax_paid_ytd: float = 0.0,
 ) -> dict:
     """
     计算小型微利企业所得税季度预缴
-    返回申报底稿数据字典
+    返回申报底稿数据字典（匹配企业所得税预缴申报表A类格式）
 
     参数：
-      revenue:        季度营业收入（元）
-      cost:           季度营业成本（元）
-      period_profit:  季度利润总额（元）
+      revenue:        季度营业收入（元）      申报表第1行
+      cost:           季度营业成本（元）      申报表第2行
+      period_profit:  季度利润总额（元）      申报表第3行
       ytd_profit:     本年累计利润总额（元）
       num_employees:  季度平均从业人数
-      total_assets:    季度平均资产总额（万元）
+      total_assets:   季度平均资产总额（万元）
+      tax_paid_ytd:   本年累计已预缴所得税额（元） 申报表第12行
 
     小型微利企业标准（2026年）：
       - 年应纳税所得额 ≤ 300万元
       - 从业人数 ≤ 300人
       - 资产总额 ≤ 5000万元
+
+    2024-2027年优惠政策：
+      - 减按25%计入应纳税所得额，按20%税率，实际税负 5%
     """
     # 判断是否符合小型微利企业条件
     is_small_low_profit = (
@@ -262,32 +267,46 @@ def calc_corporate_income_tax_quarterly(
         and total_assets <= 5000
     )
 
-    # 实际税率（小型微利企业优惠）
-    # 应纳税所得额 ≤ 300万：实际税负 5%
-    # 注：2024-2027年政策，小型微利企业减按25%计入，按20%税率，实际 5%
+    # 实际利润额（申报表第8行）= 利润总额（简化：无调整项）
+    actual_profit = period_profit
+
+    # 应纳税所得额（第8行，亏损时为0）
+    period_taxable = max(actual_profit, 0)
+
+    # 标准税率 25%
+    standard_rate = 0.25
+    # 实际优惠税率 5%（小型微利企业）
     effective_rate = 0.05 if is_small_low_profit else 0.25
 
-    # 季度应纳税所得额（以利润总额为准）
-    period_taxable = max(period_profit, 0)
-    ytd_taxable = max(ytd_profit, 0)
+    # 第10行：应纳税额 = 应纳税所得额 × 25%
+    tax_before_relief = round(period_taxable * standard_rate, 2)
 
-    # 本期应纳企业所得税
-    period_tax = round(period_taxable * effective_rate, 2)
-    ytd_tax = round(ytd_taxable * effective_rate, 2)
+    # 第11行：减免所得税额（小型微利企业优惠）
+    if is_small_low_profit and period_taxable > 0:
+        tax_actual = round(period_taxable * effective_rate, 2)
+        relief = round(tax_before_relief - tax_actual, 2)
+    else:
+        tax_actual = tax_before_relief
+        relief = 0.0
 
-    # 已预缴税额（需手动填写或累计计算）
-    tax_paid_ytd = 0.0  # 本年累计已预缴
+    # 第13行：本期应补（退）所得税额
+    tax_payable = round(tax_actual - tax_paid_ytd, 2)
+    if tax_payable < 0:
+        tax_payable = 0.0  # 亏损或已缴足，不用补税
 
     return {
         "营业收入": round(revenue, 2),
         "营业成本": round(cost, 2),
         "利润总额": round(period_profit, 2),
+        "实际利润额": round(actual_profit, 2),
         "应纳税所得额": period_taxable,
-        "适用税率": effective_rate,
-        "本期应纳税额": period_tax,
-        "本年累计应纳税额": ytd_tax,
+        "标准税率": standard_rate,
+        "优惠实际税率": effective_rate,
+        "应纳税额_标准": tax_before_relief,
+        "减免所得税额": relief,
+        "本期应纳税额": tax_actual,
         "本年累计已预缴": tax_paid_ytd,
-        "本期应补(退)税额": round(period_tax, 2),
+        "本期应补(退)税额": tax_payable,
         "从业人数": num_employees,
         "资产总额_万元": total_assets,
         "是否小型微利企业": "是" if is_small_low_profit else "否",
@@ -295,34 +314,313 @@ def calc_corporate_income_tax_quarterly(
 
 
 def format_corporate_tax_report(result: dict, quarter: int, year: int) -> str:
-    """生成企业所得税申报说明文字"""
+    """生成企业所得税申报说明文字（匹配A200000格式）"""
     lines = [
-        f"【{year}年第{quarter}季度 企业所得税预缴申报说明】",
+        f"{'='*70}",
+        f"  {year}年第{quarter}季度 企业所得税预缴申报说明",
+        f"  （匹配 A200000 申报表格式）",
+        f"{'='*70}",
         "",
-        f"一、经营情况",
-        f"  营业收入：    {result['营业收入']:,.2f} 元",
-        f"  营业成本：    {result['营业成本']:,.2f} 元",
-        f"  利润总额：    {result['利润总额']:,.2f} 元",
+        f"一、基本信息",
+        f"  纳税人名称：    武汉金艳龙科技有限公司",
+        f"  所属期间：      {year}年{[1,4,7,10][quarter-1]}月01日 至 {year}年{[3,6,9,12][quarter-1]}月31日",
+        f"  企业类型：     {result['是否小型微利企业']}（小型微利企业）",
+        f"  从业人数：     {result['从业人数']} 人",
+        f"  资产总额：     {result['资产总额_万元']:.2f} 万元",
         "",
-        f"二、纳税调整",
-        f"  应纳税所得额：{result['应纳税所得额']:,.2f} 元",
-        f"  企业类型：    {result['是否小型微利企业']}",
-        f"  适用税率：    {result['适用税率']*100:.0f}%",
+        f"{'─'*50}",
+        f"二、收入成本利润（申报表第1~3行）",
+        f"{'─'*50}",
+        f"  第1行 营业收入：       {result['营业收入']:>15,.2f} 元",
+        f"  第2行 营业成本：       {result['营业成本']:>15,.2f} 元",
+        f"  第3行 利润总额：       {result['利润总额']:>15,.2f} 元",
         "",
-        f"三、税款计算",
-        f"  本期应纳税额：      {result['本期应纳税额']:,.2f} 元",
-        f"  本年累计已预缴：  {result['本年累计已预缴']:,.2f} 元",
-        f"  本期应补(退)税额：{result['本期应补(退)税额']:,.2f} 元",
+        f"{'─'*50}",
+        f"三、应纳税所得额计算（申报表第4~8行）",
+        f"{'─'*50}",
+        f"  第4行 特定业务调整：    {0:>15,.2f}",
+        f"  第5行 不征税收入：       {0:>15,.2f}",
+        f"  第6行 固定资产折旧调整： {0:>15,.2f}",
+        f"  第7行 弥补以前年度亏损： {0:>15,.2f}",
+        f"  ───────────────────────────────",
+        f"  第8行 实际利润额：       {result['实际利润额']:>15,.2f} 元",
         "",
-        "四、申报提醒",
-        "  1. 请核对利润总额是否与利润表一致；",
-        "  2. 小型微利企业优惠系统自动判别，无需额外备案；",
-        "  3. 申报截止时间为季度终了后15日内；",
-        "  4. 请及时在电子税务局完成预缴申报。",
+        f"{'─'*50}",
+        f"四、税款计算（申报表第9~13行）",
+        f"{'─'*50}",
+        f"  第9行 税率（25%）：       {'25%':>15s}",
+        f"  第10行 应纳所得税额：     {result['应纳税额_标准']:>15,.2f} 元",
+        f"  第11行 减免所得税额：     {result['减免所得税额']:>15,.2f} 元",
+        f"  第12行 本年累计已预缴：   {result['本年累计已预缴']:>15,.2f} 元",
+        f"  ───────────────────────────────",
+        f"  第13行 本期应补(退)税额： {result['本期应补(退)税额']:>15,.2f} 元",
         "",
-        "—— 由 金艳龙AI税务助手 自动生成",
+        f"{'─'*50}",
+        f"五、计算说明",
+        f"{'─'*50}",
     ]
+
+    if result['利润总额'] <= 0:
+        lines.extend([
+            f"  【本期亏损】利润总额为 {result['利润总额']:,.2f} 元（负数），",
+            f"             实际利润额取0或保留负数，无需缴纳企业所得税。",
+            f"",
+            f"  第10行应纳所得税额 = max(实际利润额, 0) × 25% = 0 元",
+            f"  第11行减免所得税额 = 0 元（亏损无减免）",
+            f"  第13行本期应补退税额 = 0 元",
+        ])
+    else:
+        if result['是否小型微利企业'] == '是':
+            lines.extend([
+                f"  【小型微利企业优惠】2024-2027年政策：",
+                f"  - 减按25%计入应纳税所得额，按20%税率征收",
+                f"  - 实际税负 = 25% × 20% = 5%",
+                f"",
+                f"  第10行应纳所得税额 = {result['应纳税所得额']:,.2f} × 25% = {result['应纳税额_标准']:,.2f} 元",
+                f"  第11行减免所得税额 = {result['应纳税额_标准']:,.2f} - {result['本期应纳税额']:,.2f} = {result['减免所得税额']:,.2f} 元",
+                f"  第13行本期应补退税额 = {result['本期应纳税额']:,.2f} - {result['本年累计已预缴']:,.2f} = {result['本期应补(退)税额']:,.2f} 元",
+            ])
+        else:
+            lines.extend([
+                f"  【一般企业】适用标准税率 25%",
+                f"  第10行应纳所得税额 = {result['应纳税所得额']:,.2f} × 25% = {result['应纳税额_标准']:,.2f} 元",
+                f"  第11行减免所得税额 = 0 元",
+                f"  第13行本期应补退税额 = {result['本期应纳税额']:,.2f} 元",
+            ])
+
+    lines.extend([
+        "",
+        f"{'─'*50}",
+        f"六、申报提醒",
+        f"{'─'*50}",
+        "  1. 请核对利润总额与利润表（小企业会计准则）一致；",
+        "  2. 小型微利企业优惠由系统自动判别，无需额外备案；",
+        "  3. 申报截止时间为季度终了后15日内（4月、7月、10月、次年1月15日前）；",
+        "  4. 请及时在国家税务总局湖北省电子税务局完成预缴申报。",
+        "",
+        f"{'='*70}",
+        f"  —— 由 金艳龙AI税务助手 自动生成 · {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        f"{'='*70}",
+    ])
     return "\n".join(lines)
+
+
+# ===============================================
+#  银行流水自动分类（遵循小企业会计准则）
+# ===============================================
+
+def classify_bank_transaction(desc: str) -> dict:
+    """
+    根据银行流水摘要，自动分类到小企业会计准则利润表项目
+    返回：{"category": "营业收入", "pl_item": "营业收入", "影响利润": "收入"}
+    """
+    desc = str(desc).lower()
+    
+    # 一、营业收入（利润表第1行）
+    if any(k in desc for k in ["货款", "销售收入", "服务费", "咨询费", "收款", 
+                               "主营业务收入", "其他业务收入", "销售", "服务收入"]):
+        return {
+            "category": "营业收入",
+            "pl_item": "营业收入",
+            "type": "收入",
+            "account": "主营业务收入"
+        }
+    
+    # 二、营业成本（利润表第2行）
+    elif any(k in desc for k in ["采购", "进货", "材料成本", "主营业务成本", 
+                                 "材料", "成本", "进货成本"]):
+        return {
+            "category": "营业成本",
+            "pl_item": "营业成本",
+            "type": "支出",
+            "account": "主营业务成本"
+        }
+    
+    # 三、税金及附加（利润表第3行）
+    elif any(k in desc for k in ["税金", "附加费", "城建税", "教育费附加", 
+                                 "地方教育附加", "印花税", "房产税", "土地使用税"]):
+        return {
+            "category": "税金及附加",
+            "pl_item": "税金及附加",
+            "type": "支出",
+            "account": "税金及附加"
+        }
+    
+    # 四、管理费用（利润表第5行）
+    elif any(k in desc for k in ["工资", "社保", "公积金", "福利费", "奖金", 
+                                 "养老金", "医保", "失业保险", "工伤保险"]):
+        return {
+            "category": "管理费用-人工",
+            "pl_item": "管理费用",
+            "type": "支出",
+            "account": "管理费用-工资社保"
+        }
+    
+    elif any(k in desc for k in ["水电", "物业", "房租", "租赁", "办公用品", 
+                                 "电话费", "网络费", "维修费"]):
+        return {
+            "category": "管理费用-办公",
+            "pl_item": "管理费用",
+            "type": "支出",
+            "account": "管理费用-办公费"
+        }
+    
+    elif any(k in desc for k in ["差旅", "交通", "餐饮", "招待", "会议费", 
+                                 "培训费", "咨询费", "审计费"]):
+        return {
+            "category": "管理费用-其他",
+            "pl_item": "管理费用",
+            "type": "支出",
+            "account": "管理费用-业务招待费"
+        }
+    
+    # 五、财务费用（利润表第6行）
+    elif any(k in desc for k in ["利息", "手续费", "银行手续费", "汇款手续费", 
+                                 "贷款利息", "存款利息"]):
+        return {
+            "category": "财务费用",
+            "pl_item": "财务费用",
+            "type": "支出",
+            "account": "财务费用-手续费"
+        }
+    
+    # 六、营业外收入（利润表第10行）
+    elif any(k in desc for k in ["政府补助", "补贴", "罚款收入", "违约金收入", 
+                                 "捐赠收入", "盘盈"]):
+        return {
+            "category": "营业外收入",
+            "pl_item": "营业外收入",
+            "type": "收入",
+            "account": "营业外收入"
+        }
+    
+    # 七、营业外支出（利润表第11行）
+    elif any(k in desc for k in ["罚款", "捐赠", "损失", "盘亏", "自然灾害损失", 
+                                 "违约金支出"]):
+        return {
+            "category": "营业外支出",
+            "pl_item": "营业外支出",
+            "type": "支出",
+            "account": "营业外支出"
+        }
+    
+    # 八、投资收益（利润表第8行）
+    elif any(k in desc for k in ["分红", "投资收益", "股息", "理财收益", 
+                                 "投资收入"]):
+        return {
+            "category": "投资收益",
+            "pl_item": "投资收益",
+            "type": "收入",
+            "account": "投资收益"
+        }
+    
+    else:
+        return {
+            "category": "待分类",
+            "pl_item": "待分类",
+            "type": "未知",
+            "account": "待确认"
+        }
+
+
+def generate_profit_statement(df_txns: object) -> dict:
+    """
+    根据银行流水DataFrame，生成小企业会计准则利润表
+    df_txns 必须包含列：["摘要", "收入金额", "支出金额", "自动分类"]
+    
+    返回利润表各项目金额（单位：元）
+    """
+    # 营业收入（第1行）= 所有营业收入分类的收入金额之和
+    revenue = df_txns[df_txns["自动分类"] == "营业收入"]["收入金额"].sum()
+    
+    # 营业成本（第2行）= 所有营业成本分类的支出金额之和
+    cost = df_txns[df_txns["自动分类"] == "营业成本"]["支出金额"].sum()
+    
+    # 税金及附加（第3行）
+    tax_expense = df_txns[df_txns["自动分类"] == "税金及附加"]["支出金额"].sum()
+    
+    # 管理费用（第5行）= 所有管理费用子分类的支出金额之和
+    manage_expense = df_txns[
+        df_txns["自动分类"].str.contains("管理费用", na=False)
+    ]["支出金额"].sum()
+    
+    # 财务费用（第6行）
+    finance_expense = df_txns[df_txns["自动分类"] == "财务费用"]["支出金额"].sum()
+    
+    # 投资收益（第8行）
+    investment_income = df_txns[df_txns["自动分类"] == "投资收益"]["收入金额"].sum()
+    
+    # 营业利润（第9行）= 营业收入 - 营业成本 - 税金及附加 - 管理费用 - 财务费用 + 投资收益
+    operating_profit = revenue - cost - tax_expense - manage_expense - finance_expense + investment_income
+    
+    # 营业外收入（第10行）
+    other_income = df_txns[df_txns["自动分类"] == "营业外收入"]["收入金额"].sum()
+    
+    # 营业外支出（第11行）
+    other_expense = df_txns[df_txns["自动分类"] == "营业外支出"]["支出金额"].sum()
+    
+    # 利润总额（第12行）= 营业利润 + 营业外收入 - 营业外支出
+    total_profit = operating_profit + other_income - other_expense
+    
+    # 所得税费用（第13行）= 利润总额 × 税率（小型微利企业5%）
+    # 注意：亏损时不计提所得税
+    if total_profit > 0:
+        tax_expense = total_profit * 0.05  # 小型微利企业实际税负5%
+    else:
+        tax_expense = 0.0
+    
+    # 净利润（第14行）= 利润总额 - 所得税费用
+    net_profit = total_profit - tax_expense
+    
+    return {
+        "营业收入": round(revenue, 2),
+        "营业成本": round(cost, 2),
+        "税金及附加": round(tax_expense, 2),
+        "管理费用": round(manage_expense, 2),
+        "财务费用": round(finance_expense, 2),
+        "投资收益": round(investment_income, 2),
+        "营业利润": round(operating_profit, 2),
+        "营业外收入": round(other_income, 2),
+        "营业外支出": round(other_expense, 2),
+        "利润总额": round(total_profit, 2),
+        "所得税费用": round(tax_expense, 2),
+        "净利润": round(net_profit, 2),
+    }
+
+
+def validate_quarterly_declaration(profit_data: dict, revenue: float, cost: float, period_profit: float) -> list:
+    """
+    校验利润表数据与企业所得税季度申报表数据是否一致
+    
+    参数：
+      profit_data: generate_profit_statement() 的返回值
+      revenue: 申报表第1行 营业收入
+      cost: 申报表第2行 营业成本
+      period_profit: 申报表第3行 利润总额
+    
+    返回：校验结果列表，每个元素为 (是否通过, 提示信息)
+    """
+    results = []
+    
+    # 校验1：营业收入
+    if abs(profit_data["营业收入"] - revenue) > 1:
+        results.append((False, f"营业收入不一致：利润表{profit_data['营业收入']:.2f} vs 申报表{revenue:.2f}"))
+    else:
+        results.append((True, f"营业收入校验通过：{revenue:.2f} 元"))
+    
+    # 校验2：营业成本
+    if abs(profit_data["营业成本"] - cost) > 1:
+        results.append((False, f"营业成本不一致：利润表{profit_data['营业成本']:.2f} vs 申报表{cost:.2f}"))
+    else:
+        results.append((True, f"营业成本校验通过：{cost:.2f} 元"))
+    
+    # 校验3：利润总额
+    if abs(profit_data["利润总额"] - period_profit) > 1:
+        results.append((False, f"利润总额不一致：利润表{profit_data['利润总额']:.2f} vs 申报表{period_profit:.2f}"))
+    else:
+        results.append((True, f"利润总额校验通过：{period_profit:.2f} 元"))
+    
+    return results
 
 
 # ===============================================
