@@ -2054,33 +2054,34 @@ with tab2:
                     key="txn_editor",
                 )
 
-                # 生成利润表预览
-                st.subheader("📊 自动生成利润表（小企业会计准则）")
+                # 生成利润表预览 — 会小企02表格式
+                st.subheader("📊 自动生成利润表（会小企02表）")
                 profit_data = generate_profit_statement(edited_df)
                 
                 profit_df = pd.DataFrame({
-                    "利润表项目": [
-                        "一、营业收入（第1行）",
-                        "减：营业成本（第2行）",
-                        "    税金及附加（第3行）",
-                        "    管理费用（第5行）",
-                        "    财务费用（第6行）",
-                        "    资产减值损失（第7行）",
-                        "加：投资收益（第8行）",
-                        "二、营业利润（第9行）",
-                        "加：营业外收入（第10行）",
-                        "减：营业外支出（第11行）",
-                        "三、利润总额（第12行）",
-                        "减：所得税费用（第13行）",
-                        "四、净利润（第14行）",
+                    "项目": [
+                        "一、营业收入",
+                        "减：营业成本",
+                        "    税金及附加",
+                        "    销售费用",
+                        "    管理费用",
+                        "    财务费用",
+                        "加：投资收益",
+                        "二、营业利润",
+                        "加：营业外收入",
+                        "减：营业外支出",
+                        "三、利润总额",
+                        "减：所得税费用",
+                        "四、净利润",
                     ],
-                    "本期金额": [
+                    "行次": [1, 2, 3, 11, 14, 18, 20, 21, 22, 24, 30, 31, 32],
+                    "本月金额": [
                         f"{profit_data['营业收入']:,.2f}",
                         f"{profit_data['营业成本']:,.2f}",
                         f"{profit_data['税金及附加']:,.2f}",
+                        f"{profit_data['销售费用']:,.2f}",
                         f"{profit_data['管理费用']:,.2f}",
                         f"{profit_data['财务费用']:,.2f}",
-                        "0.00",
                         f"{profit_data['投资收益']:,.2f}",
                         f"{profit_data['营业利润']:,.2f}",
                         f"{profit_data['营业外收入']:,.2f}",
@@ -2088,10 +2089,25 @@ with tab2:
                         f"{profit_data['利润总额']:,.2f}",
                         f"{profit_data['所得税费用']:,.2f}",
                         f"{profit_data['净利润']:,.2f}",
-                    ]
+                    ],
+                    "本年累计金额": [
+                        f"{profit_data['营业收入']:,.2f}",
+                        f"{profit_data['营业成本']:,.2f}",
+                        f"{profit_data['税金及附加']:,.2f}",
+                        f"{profit_data['销售费用']:,.2f}",
+                        f"{profit_data['管理费用']:,.2f}",
+                        f"{profit_data['财务费用']:,.2f}",
+                        f"{profit_data['投资收益']:,.2f}",
+                        f"{profit_data['营业利润']:,.2f}",
+                        f"{profit_data['营业外收入']:,.2f}",
+                        f"{profit_data['营业外支出']:,.2f}",
+                        f"{profit_data['利润总额']:,.2f}",
+                        f"{profit_data['所得税费用']:,.2f}",
+                        f"{profit_data['净利润']:,.2f}",
+                    ],
                 })
                 st.dataframe(profit_df, use_container_width=True, hide_index=True)
-                st.caption("💡 利润表根据《小企业会计准则》生成，可与申报表第1~3行交叉校验")
+                st.caption("💡 行次对应 会小企02表（小企业会计准则利润表），本月金额=本年累计金额（季度申报）")
 
                 # 计算汇总（用于填入申报表）
                 revenue_total = profit_data["营业收入"]
@@ -2415,6 +2431,45 @@ with tab2:
                 mime="text/csv",
                 use_container_width=True,
             )
+
+    # ========== 资产负债表（会小企01表）==========
+    st.divider()
+    with st.expander("📋 资产负债表（会小企01表）", expanded=False):
+        st.caption("依据官方 Q1 数据预填。可手动修改后用于申报信息采集。")
+
+        bs_c1, bs_c2 = st.columns(2)
+
+        with bs_c1:
+            st.markdown("**资产**")
+            cash = st.number_input("货币资金（元）", value=3466.60, step=100.0, key="bs_cash")
+            st.caption(f"行1 · 流动资产合计 = {cash:,.2f}（无其他流动资产）")
+            st.markdown("---")
+            st.markdown(f"**资产合计** = **{cash:,.2f}** 元（行30）")
+
+        with bs_c2:
+            st.markdown("**负债和所有者权益**")
+            short_loan = st.number_input("短期借款（元）", value=296.85, step=100.0, key="bs_short_loan")
+            payroll_payable = st.number_input("应付职工薪酬（元）", value=11237.64, step=500.0, key="bs_payroll")
+            tax_payable_bs = st.number_input("应交税费（元）", value=-150.46, step=100.0, key="bs_tax")
+            other_payable = st.number_input("其他应付款（元）", value=14081.00, step=500.0, key="bs_other_pay")
+            total_liab = short_loan + payroll_payable + tax_payable_bs + other_payable
+            st.caption(f"行41 · 流动负债合计 = {total_liab:,.2f}（无非流动负债）")
+            st.markdown("---")
+            capital = st.number_input("实收资本（元）", value=45000.00, step=5000.0, key="bs_capital")
+            retained = st.number_input("未分配利润（元）", value=-66998.43, step=500.0, key="bs_retained")
+            equity = capital + retained
+            st.caption(f"行52 · 所有者权益合计 = {equity:,.2f}")
+            st.markdown("---")
+            st.markdown(f"**负债和所有者权益总计** = **{total_liab + equity:,.2f}** 元（行53）")
+
+        # 平衡校验
+        assets_total = cash
+        liab_equity_total = total_liab + equity
+        delta = assets_total - liab_equity_total
+        if abs(delta) < 1:
+            st.success(f"✅ 资产负债表平衡！资产 {assets_total:,.2f} = 负债+权益 {liab_equity_total:,.2f}")
+        else:
+            st.error(f"⚠️ 资产负债表不平衡！资产 {assets_total:,.2f} ≠ 负债+权益 {liab_equity_total:,.2f}（差额 {delta:,.2f}）")
 
 # ===============================================
 #  Tab5：税款缴纳清单
@@ -4003,7 +4058,7 @@ with tab6:
 with tab1:
     st.header("🗂️ 年报数据导入")
     st.caption("支持 Excel / PDF 两种格式。导入后年报数据自动拆分为 4 个季度申报底稿。税务年报与内部底稿不一致时，重新导入即可纠偏。")
-    st.success("✅ v1.7.0 — 年报导入 & 季报联动已就绪（2026-06-03 build）")
+    st.success("✅ v1.8.0 — 会小企01/02表官方格式（2026-06-03 build）")
 
     # ── 检查是否有历史导入 ──
     snapshot_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "年报导入快照.json")
