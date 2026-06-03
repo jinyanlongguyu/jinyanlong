@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-武汉金艳龙科技有限公司 - 个税/社保计算脚本（MVP版）
-适用场景：零申报企业，有工资发放和社保缴纳
-运行：python tax_calculator.py
+姝︽眽閲戣壋榫欑鎶€鏈夐檺鍏徃 - 涓◣/绀句繚璁＄畻鑴氭湰锛圡VP鐗堬級
+閫傜敤鍦烘櫙锛氶浂鐢虫姤浼佷笟锛屾湁宸ヨ祫鍙戞斁鍜岀ぞ淇濈即绾?杩愯锛歱ython tax_calculator.py
 """
 
 from datetime import datetime
@@ -11,8 +10,7 @@ import json
 import os
 
 # ===============================================
-#  政策参数加载器（从 tax_policies.json 读取）
-# ===============================================
+#  鏀跨瓥鍙傛暟鍔犺浇鍣紙浠?tax_policies.json 璇诲彇锛?# ===============================================
 
 _POLICIES_CACHE = None
 _POLICIES_CACHE_TIME = None
@@ -20,7 +18,7 @@ _POLICIES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tax_p
 
 
 def _load_raw_policies():
-    """加载原始 JSON（带缓存，60秒刷新）"""
+    """鍔犺浇鍘熷 JSON锛堝甫缂撳瓨锛?0绉掑埛鏂帮級"""
     global _POLICIES_CACHE, _POLICIES_CACHE_TIME
     now = datetime.now()
     if _POLICIES_CACHE is not None and _POLICIES_CACHE_TIME is not None:
@@ -34,25 +32,20 @@ def _load_raw_policies():
 
 def load_tax_policies(year: int = None):
     """
-    加载指定年度的税收政策参数。
+    鍔犺浇鎸囧畾骞村害鐨勭◣鏀舵斂绛栧弬鏁般€?
+    鏌ユ壘閫昏緫锛?    1. 鎸?year 鍖归厤 policy_periods 涓殑鍖洪棿
+    2. 濡傛灉鍖归厤鍒扮殑鍖洪棿 status="placeholder" 涓旀湁 inherit_from锛屽洖閫€鍒版簮鍖洪棿
+    3. 杩斿洖涓€涓墎骞冲寲鐨勫弬鏁板瓧鍏革紝渚涘悇璁＄畻鍑芥暟浣跨敤
 
-    查找逻辑：
-    1. 按 year 匹配 policy_periods 中的区间
-    2. 如果匹配到的区间 status="placeholder" 且有 inherit_from，回退到源区间
-    3. 返回一个扁平化的参数字典，供各计算函数使用
-
-    参数：
-      year: 申报年度，默认当前年
-    返回：
-      dict 包含所有税种参数 + 元数据
-    """
+    鍙傛暟锛?      year: 鐢虫姤骞村害锛岄粯璁ゅ綋鍓嶅勾
+    杩斿洖锛?      dict 鍖呭惈鎵€鏈夌◣绉嶅弬鏁?+ 鍏冩暟鎹?    """
     if year is None:
         year = datetime.now().year
 
     raw = _load_raw_policies()
     periods = raw.get("policy_periods", [])
 
-    # 1. 查找匹配区间
+    # 1. 鏌ユ壘鍖归厤鍖洪棿
     matched = None
     for p in periods:
         start = int(p["effective_from"][:4])
@@ -62,20 +55,18 @@ def load_tax_policies(year: int = None):
             break
 
     if matched is None:
-        # 超出所有区间范围，使用最后一个
-        matched = periods[-1] if periods else {}
+        # 瓒呭嚭鎵€鏈夊尯闂磋寖鍥达紝浣跨敤鏈€鍚庝竴涓?        matched = periods[-1] if periods else {}
 
-    # 2. 如果是占位区间，回退到继承源
+    # 2. 濡傛灉鏄崰浣嶅尯闂达紝鍥為€€鍒扮户鎵挎簮
     if matched.get("status") == "placeholder" and matched.get("inherit_from"):
         inherit_period = matched["inherit_from"]
         for p in periods:
             if p["period"] == inherit_period:
-                # 深度合并：占位区间覆盖源区间（占位区间可能有部分覆盖值）
+                # 娣卞害鍚堝苟锛氬崰浣嶅尯闂磋鐩栨簮鍖洪棿锛堝崰浣嶅尯闂村彲鑳芥湁閮ㄥ垎瑕嗙洊鍊硷級
                 matched = _deep_merge(p.copy(), matched)
                 break
 
-    # 3. 提取特殊附加扣除（跨税种共用）
-    special_deductions = raw.get("special_deductions", {})
+    # 3. 鎻愬彇鐗规畩闄勫姞鎵ｉ櫎锛堣法绋庣鍏辩敤锛?    special_deductions = raw.get("special_deductions", {})
 
     return {
         "_meta": {
@@ -100,7 +91,7 @@ def load_tax_policies(year: int = None):
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
-    """深度合并：override 中的值覆盖 base（但保留 base 中 override 没有的键）"""
+    """娣卞害鍚堝苟锛歰verride 涓殑鍊艰鐩?base锛堜絾淇濈暀 base 涓?override 娌℃湁鐨勯敭锛?""
     result = base.copy()
     for key, value in override.items():
         if key in result and isinstance(result[key], dict) and isinstance(value, dict):
@@ -111,8 +102,7 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 
 # ===============================================
-#  向后兼容：保留模块级常量（从 JSON 默认加载）
-# ===============================================
+#  鍚戝悗鍏煎锛氫繚鐣欐ā鍧楃骇甯搁噺锛堜粠 JSON 榛樿鍔犺浇锛?# ===============================================
 
 _default_pol = load_tax_policies()
 
@@ -122,8 +112,7 @@ SOCIAL_INSURANCE = {
     "unemployment_personal": _default_pol["social_insurance"]["personal_rates"]["unemployment"],
 }
 
-SOCIAL_INSURANCE_ACTUAL = _default_pol["social_insurance"]["personal_actual"]  # 522 = 基数×10.3%+大病7元
-
+SOCIAL_INSURANCE_ACTUAL = _default_pol["social_insurance"]["personal_actual"]  # 522 = 鍩烘暟脳10.3%+澶х梾7鍏?
 SOCIAL_INSURANCE_COMPANY = {
     "pension": _default_pol["social_insurance"]["company_rates"]["pension"],
     "medical": _default_pol["social_insurance"]["company_rates"]["medical"],
@@ -146,7 +135,7 @@ BASIC_DEDUCTION = _default_pol["personal_income_tax"]["basic_deduction"]
 
 
 def calc_social_insurance_company(base=5000):
-    """计算公司社保部分（大病医保已含在医疗8.7%费率中，不另计）"""
+    """璁＄畻鍏徃绀句繚閮ㄥ垎锛堝ぇ鐥呭尰淇濆凡鍚湪鍖荤枟8.7%璐圭巼涓紝涓嶅彟璁★級"""
     return (
         base * SOCIAL_INSURANCE_COMPANY["pension"]
         + base * SOCIAL_INSURANCE_COMPANY["medical"]
@@ -162,8 +151,8 @@ def calc_income_tax(
     special_deductions: float,
 ) -> tuple[float, float]:
     """
-    计算个人所得税
-    返回：(应纳税额, 应税收入)
+    璁＄畻涓汉鎵€寰楃◣
+    杩斿洖锛?搴旂撼绋庨, 搴旂◣鏀跺叆)
     """
     taxable_income = (
         gross_salary
@@ -176,7 +165,7 @@ def calc_income_tax(
     if taxable_income <= 0:
         return 0.0, 0.0
 
-    # 查找适用税率
+    # 鏌ユ壘閫傜敤绋庣巼
     tax_rate = 0.03
     quick_deduction = 0
     for lower, upper, rate, deduction in TAX_BRACKETS:
@@ -190,22 +179,18 @@ def calc_income_tax(
 
 
 def format_money(val: float) -> str:
-    """格式化金额显示"""
+    """鏍煎紡鍖栭噾棰濇樉绀?""
     return f"{val:,.2f}"
 
 
 def process_employees(employees: list[dict]) -> list[dict]:
     """
-    处理员工列表，返回计算结果
-    employees 每项格式：
-    {
-        "name": "员工A",
+    澶勭悊鍛樺伐鍒楄〃锛岃繑鍥炶绠楃粨鏋?    employees 姣忛」鏍煎紡锛?    {
+        "name": "鍛樺伐A",
         "gross_salary": 10522,
         "si_base": 5000,
-        "si_personal_actual": 522,   # 个人社保实缴 = 基数×(8%+2%+0.3%)+大病7元
-        "special_deductions": 5000,   # 专项附加扣除合计
-        "child_education": 2000,     # 明细（可选，用于底稿）
-        "infant_care": 2000,
+        "si_personal_actual": 522,   # 涓汉绀句繚瀹炵即 = 鍩烘暟脳(8%+2%+0.3%)+澶х梾7鍏?        "special_deductions": 5000,   # 涓撻」闄勫姞鎵ｉ櫎鍚堣
+        "child_education": 2000,     # 鏄庣粏锛堝彲閫夛紝鐢ㄤ簬搴曠锛?        "infant_care": 2000,
         "elderly_care": 1000,
     }
     """
@@ -230,102 +215,102 @@ def process_employees(employees: list[dict]) -> list[dict]:
         total_cost = gross + si_company + hf_company
 
         results.append({
-            "姓名": emp["name"],
-            "税前工资": gross,
-            "个人社保": si_personal,
-            "个人公积金": hf_personal,
-            "专项附加扣除": special,
-            "应税收入": taxable_income,
-            "应纳税额": tax,
-            "实发工资": round(net_salary, 2),
-            "公司社保承担": round(si_company, 2),
-            "公司公积金承担": round(hf_company, 2),
-            "公司用人总成本": round(total_cost, 2),
-            # 明细（用于底稿）
-            "子女教育": emp.get("child_education", 0),
-            "婴幼儿照护": emp.get("infant_care", 0),
-            "赡养老人": emp.get("elderly_care", 0),
+            "濮撳悕": emp["name"],
+            "绋庡墠宸ヨ祫": gross,
+            "涓汉绀句繚": si_personal,
+            "涓汉鍏Н閲?: hf_personal,
+            "涓撻」闄勫姞鎵ｉ櫎": special,
+            "搴旂◣鏀跺叆": taxable_income,
+            "搴旂撼绋庨": tax,
+            "瀹炲彂宸ヨ祫": round(net_salary, 2),
+            "鍏徃绀句繚鎵挎媴": round(si_company, 2),
+            "鍏徃鍏Н閲戞壙鎷?: round(hf_company, 2),
+            "鍏徃鐢ㄤ汉鎬绘垚鏈?: round(total_cost, 2),
+            # 鏄庣粏锛堢敤浜庡簳绋匡級
+            "瀛愬コ鏁欒偛": emp.get("child_education", 0),
+            "濠村辜鍎跨収鎶?: emp.get("infant_care", 0),
+            "璧″吇鑰佷汉": emp.get("elderly_care", 0),
         })
 
     return results
 
 
 def print_results(results: list[dict]):
-    """打印计算结果"""
+    """鎵撳嵃璁＄畻缁撴灉"""
     print("\n" + "=" * 70)
-    print("  个税/社保计算结果  |  武汉金艳龙科技有限公司")
+    print("  涓◣/绀句繚璁＄畻缁撴灉  |  姝︽眽閲戣壋榫欑鎶€鏈夐檺鍏徃")
     print("=" * 70)
 
     for r in results:
-        print(f"\n【{r['姓名']}】")
-        print(f"  税前工资：      {format_money(r['税前工资'])} 元")
-        print(f"  个人社保扣款：  {format_money(r['个人社保'])} 元")
-        print(f"  专项附加扣除：  {format_money(r['专项附加扣除'])} 元")
-        print(f"    ├─ 子女教育： {format_money(r['子女教育'])} 元")
-        print(f"    ├─ 婴幼儿照护：{format_money(r['婴幼儿照护'])} 元")
-        print(f"    └─ 赡养老人： {format_money(r['赡养老人'])} 元")
-        print(f"  应税收入：      {format_money(r['应税收入'])} 元")
-        print(f"  应纳税额：      {format_money(r['应纳税额'])} 元")
-        print(f"  实发工资：      {format_money(r['实发工资'])} 元")
-        print(f"  公司社保承担：  {format_money(r['公司社保承担'])} 元")
-        print(f"  公司用人总成本：{format_money(r['公司用人总成本'])} 元")
+        print(f"\n銆恵r['濮撳悕']}銆?)
+        print(f"  绋庡墠宸ヨ祫锛?     {format_money(r['绋庡墠宸ヨ祫'])} 鍏?)
+        print(f"  涓汉绀句繚鎵ｆ锛? {format_money(r['涓汉绀句繚'])} 鍏?)
+        print(f"  涓撻」闄勫姞鎵ｉ櫎锛? {format_money(r['涓撻」闄勫姞鎵ｉ櫎'])} 鍏?)
+        print(f"    鈹溾攢 瀛愬コ鏁欒偛锛?{format_money(r['瀛愬コ鏁欒偛'])} 鍏?)
+        print(f"    鈹溾攢 濠村辜鍎跨収鎶わ細{format_money(r['濠村辜鍎跨収鎶?])} 鍏?)
+        print(f"    鈹斺攢 璧″吇鑰佷汉锛?{format_money(r['璧″吇鑰佷汉'])} 鍏?)
+        print(f"  搴旂◣鏀跺叆锛?     {format_money(r['搴旂◣鏀跺叆'])} 鍏?)
+        print(f"  搴旂撼绋庨锛?     {format_money(r['搴旂撼绋庨'])} 鍏?)
+        print(f"  瀹炲彂宸ヨ祫锛?     {format_money(r['瀹炲彂宸ヨ祫'])} 鍏?)
+        print(f"  鍏徃绀句繚鎵挎媴锛? {format_money(r['鍏徃绀句繚鎵挎媴'])} 鍏?)
+        print(f"  鍏徃鐢ㄤ汉鎬绘垚鏈細{format_money(r['鍏徃鐢ㄤ汉鎬绘垚鏈?])} 鍏?)
 
     print("\n" + "-" * 70)
-    print("  【汇总】")
-    total_gross = sum(r["税前工资"] for r in results)
-    total_tax = sum(r["应纳税额"] for r in results)
-    total_net = sum(r["实发工资"] for r in results)
-    total_si_company = sum(r["公司社保承担"] for r in results)
-    total_cost = sum(r["公司用人总成本"] for r in results)
-    print(f"  工资总额：      {format_money(total_gross)} 元")
-    print(f"  个税总额：      {format_money(total_tax)} 元")
-    print(f"  实发工资总额：  {format_money(total_net)} 元")
-    print(f"  公司社保总额：  {format_money(total_si_company)} 元")
-    print(f"  公司用人总成本：{format_money(total_cost)} 元")
+    print("  銆愭眹鎬汇€?)
+    total_gross = sum(r["绋庡墠宸ヨ祫"] for r in results)
+    total_tax = sum(r["搴旂撼绋庨"] for r in results)
+    total_net = sum(r["瀹炲彂宸ヨ祫"] for r in results)
+    total_si_company = sum(r["鍏徃绀句繚鎵挎媴"] for r in results)
+    total_cost = sum(r["鍏徃鐢ㄤ汉鎬绘垚鏈?] for r in results)
+    print(f"  宸ヨ祫鎬婚锛?     {format_money(total_gross)} 鍏?)
+    print(f"  涓◣鎬婚锛?     {format_money(total_tax)} 鍏?)
+    print(f"  瀹炲彂宸ヨ祫鎬婚锛? {format_money(total_net)} 鍏?)
+    print(f"  鍏徃绀句繚鎬婚锛? {format_money(total_si_company)} 鍏?)
+    print(f"  鍏徃鐢ㄤ汉鎬绘垚鏈細{format_money(total_cost)} 鍏?)
     print("=" * 70)
 
 
 def export_csv(results: list[dict], output_path: str = None):
-    """导出CSV底稿（无需pandas依赖）"""
+    """瀵煎嚭CSV搴曠锛堟棤闇€pandas渚濊禆锛?""
     if output_path is None:
         month = datetime.now().strftime("%Y%m")
-        output_path = f"申报底稿_{month}.csv"
+        output_path = f"鐢虫姤搴曠_{month}.csv"
 
-    # 表头
+    # 琛ㄥご
     headers = [
-        "姓名", "税前工资", "个人社保", "个人公积金",
-        "专项附加扣除合计", "子女教育", "婴幼儿照护", "赡养老人",
-        "应税收入", "应纳税额", "实发工资",
-        "公司社保承担", "公司公积金承担", "公司用人总成本"
+        "濮撳悕", "绋庡墠宸ヨ祫", "涓汉绀句繚", "涓汉鍏Н閲?,
+        "涓撻」闄勫姞鎵ｉ櫎鍚堣", "瀛愬コ鏁欒偛", "濠村辜鍎跨収鎶?, "璧″吇鑰佷汉",
+        "搴旂◣鏀跺叆", "搴旂撼绋庨", "瀹炲彂宸ヨ祫",
+        "鍏徃绀句繚鎵挎媴", "鍏徃鍏Н閲戞壙鎷?, "鍏徃鐢ㄤ汉鎬绘垚鏈?
     ]
 
     with open(output_path, "w", encoding="utf-8-sig", newline="") as f:
         f.write(",".join(headers) + "\n")
         for r in results:
             row = [
-                r["姓名"],
-                str(r["税前工资"]),
-                str(r["个人社保"]),
-                str(r["个人公积金"]),
-                str(r["专项附加扣除"]),
-                str(r["子女教育"]),
-                str(r["婴幼儿照护"]),
-                str(r["赡养老人"]),
-                str(r["应税收入"]),
-                str(r["应纳税额"]),
-                str(r["实发工资"]),
-                str(r["公司社保承担"]),
-                str(r["公司公积金承担"]),
-                str(r["公司用人总成本"]),
+                r["濮撳悕"],
+                str(r["绋庡墠宸ヨ祫"]),
+                str(r["涓汉绀句繚"]),
+                str(r["涓汉鍏Н閲?]),
+                str(r["涓撻」闄勫姞鎵ｉ櫎"]),
+                str(r["瀛愬コ鏁欒偛"]),
+                str(r["濠村辜鍎跨収鎶?]),
+                str(r["璧″吇鑰佷汉"]),
+                str(r["搴旂◣鏀跺叆"]),
+                str(r["搴旂撼绋庨"]),
+                str(r["瀹炲彂宸ヨ祫"]),
+                str(r["鍏徃绀句繚鎵挎媴"]),
+                str(r["鍏徃鍏Н閲戞壙鎷?]),
+                str(r["鍏徃鐢ㄤ汉鎬绘垚鏈?]),
             ]
             f.write(",".join(row) + "\n")
 
-    print(f"\n[OK] CSV底稿已生成：{output_path}")
+    print(f"\n[OK] CSV搴曠宸茬敓鎴愶細{output_path}")
     return output_path
 
 
 # ===============================================
-#  企业所得税季度预缴（小型微利企业优惠）
+#  浼佷笟鎵€寰楃◣瀛ｅ害棰勭即锛堝皬鍨嬪井鍒╀紒涓氫紭鎯狅級
 # ===============================================
 
 def calc_vat_and_surcharge(
@@ -337,29 +322,25 @@ def calc_vat_and_surcharge(
     tax_year: int = None,
 ) -> dict:
     """
-    计算增值税及附加税（城建税、教育费附加、地方教育附加）
+    璁＄畻澧炲€肩◣鍙婇檮鍔犵◣锛堝煄寤虹◣銆佹暀鑲茶垂闄勫姞銆佸湴鏂规暀鑲查檮鍔狅級
 
-    税率参数从 tax_policies.json 读取，按申报年度自动匹配对应政策区间。
-
-    参数：
-      revenue:          季度含税营业收入（元）
-      vat_rate:         增值税名义税率（小规模原3%，实际减按1%）
-      is_small_scale:   是否小规模纳税人
-      is_small_low_profit: 是否小型微利企业（影响六税两费减半资格）
-      vat_paid_ytd:     本年已缴增值税（用于校验）
-      tax_year:         申报年度（默认当前年，用于匹配政策区间）
+    绋庣巼鍙傛暟浠?tax_policies.json 璇诲彇锛屾寜鐢虫姤骞村害鑷姩鍖归厤瀵瑰簲鏀跨瓥鍖洪棿銆?
+    鍙傛暟锛?      revenue:          瀛ｅ害鍚◣钀ヤ笟鏀跺叆锛堝厓锛?      vat_rate:         澧炲€肩◣鍚嶄箟绋庣巼锛堝皬瑙勬ā鍘?%锛屽疄闄呭噺鎸?%锛?      is_small_scale:   鏄惁灏忚妯＄撼绋庝汉
+      is_small_low_profit: 鏄惁灏忓瀷寰埄浼佷笟锛堝奖鍝嶅叚绋庝袱璐瑰噺鍗婅祫鏍硷級
+      vat_paid_ytd:     鏈勾宸茬即澧炲€肩◣锛堢敤浜庢牎楠岋級
+      tax_year:         鐢虫姤骞村害锛堥粯璁ゅ綋鍓嶅勾锛岀敤浜庡尮閰嶆斂绛栧尯闂达級
     """
     pol = load_tax_policies(tax_year if tax_year else None)
     vat_pol = pol["vat"]
     sur_pol = pol["surcharges"]
 
-    # ===== 小规模纳税人：含税收入换算不含税收入 =====
+    # ===== 灏忚妯＄撼绋庝汉锛氬惈绋庢敹鍏ユ崲绠椾笉鍚◣鏀跺叆 =====
     if is_small_scale:
         revenue_excl = round(revenue / (1 + vat_rate), 2)
     else:
         revenue_excl = revenue
 
-    # ===== 增值税计算 =====
+    # ===== 澧炲€肩◣璁＄畻 =====
     exempt_threshold = vat_pol["quarterly_exempt_threshold"]
     effective_rate = vat_pol["small_scale_effective_rate"]
     nominal_rate = vat_pol["small_scale_nominal_rate"]
@@ -367,26 +348,26 @@ def calc_vat_and_surcharge(
 
     if is_small_scale and revenue_excl <= exempt_threshold:
         vat = 0.0
-        vat_note = f"季度不含税收入 {revenue_excl:,.2f} 元 ≤ {exempt_threshold//10000}万 → 免征增值税"
-        vat_policy = f"{vat_ref}：小规模纳税人季度≤{exempt_threshold//10000}万免征增值税"
+        vat_note = f"瀛ｅ害涓嶅惈绋庢敹鍏?{revenue_excl:,.2f} 鍏?鈮?{exempt_threshold//10000}涓?鈫?鍏嶅緛澧炲€肩◣"
+        vat_policy = f"{vat_ref}锛氬皬瑙勬ā绾崇◣浜哄搴︹墹{exempt_threshold//10000}涓囧厤寰佸鍊肩◣"
         vat_effective_rate = 0.0
     elif is_small_scale:
         vat = round(revenue_excl * effective_rate, 2)
-        vat_note = f"季度不含税收入 {revenue_excl:,.2f} 元 > {exempt_threshold//10000}万 → 减按{effective_rate*100:.0f}%征收（原{nominal_rate*100:.0f}%）"
-        vat_policy = f"{vat_ref}：小规模纳税人减按{effective_rate*100:.0f}%征收"
+        vat_note = f"瀛ｅ害涓嶅惈绋庢敹鍏?{revenue_excl:,.2f} 鍏?> {exempt_threshold//10000}涓?鈫?鍑忔寜{effective_rate*100:.0f}%寰佹敹锛堝師{nominal_rate*100:.0f}%锛?
+        vat_policy = f"{vat_ref}锛氬皬瑙勬ā绾崇◣浜哄噺鎸墈effective_rate*100:.0f}%寰佹敹"
         vat_effective_rate = effective_rate
     else:
         vat = round(revenue_excl * vat_rate, 2)
-        vat_note = f"一般纳税人按{vat_rate*100:.0f}%征收"
-        vat_policy = "一般纳税人标准税率"
+        vat_note = f"涓€鑸撼绋庝汉鎸墈vat_rate*100:.0f}%寰佹敹"
+        vat_policy = "涓€鑸撼绋庝汉鏍囧噯绋庣巼"
         vat_effective_rate = vat_rate
 
-    # ===== 六税两费减半判断 =====
+    # ===== 鍏◣涓よ垂鍑忓崐鍒ゆ柇 =====
     six_two_half = sur_pol.get("six_two_half_enabled", True) and (is_small_scale or is_small_low_profit)
     half = sur_pol["half_multiplier"] if six_two_half else 1.0
     sur_ref = sur_pol["policy_ref"]
 
-    # ===== 附加税（以实际缴纳增值税为基础）=====
+    # ===== 闄勫姞绋庯紙浠ュ疄闄呯即绾冲鍊肩◣涓哄熀纭€锛?====
     urban_nom = sur_pol["urban_construction_nominal"]
     edu_nom = sur_pol["education_nominal"]
     local_nom = sur_pol["local_education_nominal"]
@@ -398,36 +379,36 @@ def calc_vat_and_surcharge(
 
     if six_two_half:
         surcharge_policy = (
-            f"「六税两费减半」城建{urban_nom*100:.0f}%→{urban_nom*half*100:.1f}%、"
-            f"教育{edu_nom*100:.0f}%→{edu_nom*half*100:.1f}%、"
-            f"地方教育{local_nom*100:.0f}%→{local_nom*half*100:.0f}%，"
-            f"合计{(urban_nom+edu_nom+local_nom)*half*100:.0f}%"
+            f"銆屽叚绋庝袱璐瑰噺鍗娿€嶅煄寤簕urban_nom*100:.0f}%鈫抺urban_nom*half*100:.1f}%銆?
+            f"鏁欒偛{edu_nom*100:.0f}%鈫抺edu_nom*half*100:.1f}%銆?
+            f"鍦版柟鏁欒偛{local_nom*100:.0f}%鈫抺local_nom*half*100:.0f}%锛?
+            f"鍚堣{(urban_nom+edu_nom+local_nom)*half*100:.0f}%"
         )
     else:
-        surcharge_policy = f"标准附加税率：城建{urban_nom*100:.0f}% + 教育{edu_nom*100:.0f}% + 地方教育{local_nom*100:.0f}%，合计{(urban_nom+edu_nom+local_nom)*100:.0f}%"
+        surcharge_policy = f"鏍囧噯闄勫姞绋庣巼锛氬煄寤簕urban_nom*100:.0f}% + 鏁欒偛{edu_nom*100:.0f}% + 鍦版柟鏁欒偛{local_nom*100:.0f}%锛屽悎璁(urban_nom+edu_nom+local_nom)*100:.0f}%"
 
     return {
-        "季度含税收入": round(revenue, 2),
-        "季度不含税收入": revenue_excl,
-        "增值税名义税率": vat_rate,
-        "增值税实际税率": vat_effective_rate,
-        "是否小规模纳税人": "是" if is_small_scale else "否",
-        "是否小型微利企业": "是" if is_small_low_profit else "否",
-        "是否享受六税两费减半": "是" if six_two_half else "否",
-        "增值税应缴": vat,
-        "增值税免税说明": vat_note,
-        "增值税优惠依据": vat_policy,
-        "城建税名义": round(vat * urban_nom, 2),
-        "城建税(7%)": urban_tax,
-        "教育费附加名义": round(vat * edu_nom, 2),
-        "教育费附加(3%)": edu_surcharge,
-        "地方教育附加名义": round(vat * local_nom, 2),
-        "地方教育附加(2%)": local_edu,
-        "附加税合计": total_surcharge,
-        "附加税优惠说明": surcharge_policy,
-        "六税两费减免金额": round(vat * (urban_nom + edu_nom + local_nom) * (1 - half), 2),
-        "增值税及附加合计": round(vat + total_surcharge, 2),
-        "_政策区间": pol["_meta"]["period"],
+        "瀛ｅ害鍚◣鏀跺叆": round(revenue, 2),
+        "瀛ｅ害涓嶅惈绋庢敹鍏?: revenue_excl,
+        "澧炲€肩◣鍚嶄箟绋庣巼": vat_rate,
+        "澧炲€肩◣瀹為檯绋庣巼": vat_effective_rate,
+        "鏄惁灏忚妯＄撼绋庝汉": "鏄? if is_small_scale else "鍚?,
+        "鏄惁灏忓瀷寰埄浼佷笟": "鏄? if is_small_low_profit else "鍚?,
+        "鏄惁浜彈鍏◣涓よ垂鍑忓崐": "鏄? if six_two_half else "鍚?,
+        "澧炲€肩◣搴旂即": vat,
+        "澧炲€肩◣鍏嶇◣璇存槑": vat_note,
+        "澧炲€肩◣浼樻儬渚濇嵁": vat_policy,
+        "鍩庡缓绋庡悕涔?: round(vat * urban_nom, 2),
+        "鍩庡缓绋?7%)": urban_tax,
+        "鏁欒偛璐归檮鍔犲悕涔?: round(vat * edu_nom, 2),
+        "鏁欒偛璐归檮鍔?3%)": edu_surcharge,
+        "鍦版柟鏁欒偛闄勫姞鍚嶄箟": round(vat * local_nom, 2),
+        "鍦版柟鏁欒偛闄勫姞(2%)": local_edu,
+        "闄勫姞绋庡悎璁?: total_surcharge,
+        "闄勫姞绋庝紭鎯犺鏄?: surcharge_policy,
+        "鍏◣涓よ垂鍑忓厤閲戦": round(vat * (urban_nom + edu_nom + local_nom) * (1 - half), 2),
+        "澧炲€肩◣鍙婇檮鍔犲悎璁?: round(vat + total_surcharge, 2),
+        "_鏀跨瓥鍖洪棿": pol["_meta"]["period"],
     }
 
 
@@ -443,21 +424,15 @@ def calc_corporate_income_tax_quarterly(
     tax_year: int = None,
 ) -> dict:
     """
-    计算小型微利企业所得税季度预缴
-    返回申报底稿数据字典（匹配企业所得税预缴申报表A类格式）
+    璁＄畻灏忓瀷寰埄浼佷笟鎵€寰楃◣瀛ｅ害棰勭即
+    杩斿洖鐢虫姤搴曠鏁版嵁瀛楀吀锛堝尮閰嶄紒涓氭墍寰楃◣棰勭即鐢虫姤琛ˋ绫绘牸寮忥級
 
-    税率参数从 tax_policies.json 读取。
-
-    参数：
-      revenue:        季度营业收入（元）      申报表第1行
-      cost:           季度营业成本（元）      申报表第2行
-      period_profit:  季度利润总额（元）      申报表第3行
-      ytd_profit:     本年累计利润总额（元）
-      num_employees:  季度平均从业人数
-      total_assets:   季度平均资产总额（万元）
-      tax_paid_ytd:   本年累计已预缴所得税额（元）
-      vat_data:       增值税及附加税计算结果
-      tax_year:       申报年度（用于匹配政策区间）
+    绋庣巼鍙傛暟浠?tax_policies.json 璇诲彇銆?
+    鍙傛暟锛?      revenue:        瀛ｅ害钀ヤ笟鏀跺叆锛堝厓锛?     鐢虫姤琛ㄧ1琛?      cost:           瀛ｅ害钀ヤ笟鎴愭湰锛堝厓锛?     鐢虫姤琛ㄧ2琛?      period_profit:  瀛ｅ害鍒╂鼎鎬婚锛堝厓锛?     鐢虫姤琛ㄧ3琛?      ytd_profit:     鏈勾绱鍒╂鼎鎬婚锛堝厓锛?      num_employees:  瀛ｅ害骞冲潎浠庝笟浜烘暟
+      total_assets:   瀛ｅ害骞冲潎璧勪骇鎬婚锛堜竾鍏冿級
+      tax_paid_ytd:   鏈勾绱宸查缂存墍寰楃◣棰濓紙鍏冿級
+      vat_data:       澧炲€肩◣鍙婇檮鍔犵◣璁＄畻缁撴灉
+      tax_year:       鐢虫姤骞村害锛堢敤浜庡尮閰嶆斂绛栧尯闂达級
     """
     pol = load_tax_policies(tax_year if tax_year else None)
     cit_pol = pol["corporate_income_tax"]
@@ -466,66 +441,64 @@ def calc_corporate_income_tax_quarterly(
     effective_rate = cit_pol["small_low_profit_effective_rate"]
     cit_ref = cit_pol["policy_ref"]
 
-    # 判断是否符合小型微利企业条件
+    # 鍒ゆ柇鏄惁绗﹀悎灏忓瀷寰埄浼佷笟鏉′欢
     is_small_low_profit = (
         num_employees <= criteria["max_employees"]
         and total_assets <= criteria["max_assets_wan"]
     )
 
-    # 实际利润额（申报表第8行）
+    # 瀹為檯鍒╂鼎棰濓紙鐢虫姤琛ㄧ8琛岋級
     actual_profit = period_profit
     period_taxable = max(actual_profit, 0)
 
-    # 第10行：应纳税额 = 应纳税所得额 × 标准税率
+    # 绗?0琛岋細搴旂撼绋庨 = 搴旂撼绋庢墍寰楅 脳 鏍囧噯绋庣巼
     tax_before_relief = round(period_taxable * standard_rate, 2)
 
-    # 第11行：减免所得税额
-    if is_small_low_profit and period_taxable > 0:
+    # 绗?1琛岋細鍑忓厤鎵€寰楃◣棰?    if is_small_low_profit and period_taxable > 0:
         tax_actual = round(period_taxable * effective_rate, 2)
         relief = round(tax_before_relief - tax_actual, 2)
     else:
         tax_actual = tax_before_relief
         relief = 0.0
 
-    # 第13行：本期应补（退）所得税额
-    tax_payable = round(tax_actual - tax_paid_ytd, 2)
+    # 绗?3琛岋細鏈湡搴旇ˉ锛堥€€锛夋墍寰楃◣棰?    tax_payable = round(tax_actual - tax_paid_ytd, 2)
     if tax_payable < 0:
         tax_payable = 0.0
 
     result = {
-        "营业收入": round(revenue, 2),
-        "营业成本": round(cost, 2),
-        "利润总额": round(period_profit, 2),
-        "实际利润额": round(actual_profit, 2),
-        "应纳税所得额": period_taxable,
-        "标准税率": standard_rate,
-        "优惠实际税率": effective_rate,
-        "应纳税额_标准": tax_before_relief,
-        "减免所得税额": relief,
-        "本期应纳税额": tax_actual,
-        "本年累计已预缴": tax_paid_ytd,
-        "本期应补(退)税额": tax_payable,
-        "从业人数": num_employees,
-        "资产总额_万元": total_assets,
-        "是否小型微利企业": "是" if is_small_low_profit else "否",
-        "_政策依据": cit_ref,
-        "_政策区间": pol["_meta"]["period"],
+        "钀ヤ笟鏀跺叆": round(revenue, 2),
+        "钀ヤ笟鎴愭湰": round(cost, 2),
+        "鍒╂鼎鎬婚": round(period_profit, 2),
+        "瀹為檯鍒╂鼎棰?: round(actual_profit, 2),
+        "搴旂撼绋庢墍寰楅": period_taxable,
+        "鏍囧噯绋庣巼": standard_rate,
+        "浼樻儬瀹為檯绋庣巼": effective_rate,
+        "搴旂撼绋庨_鏍囧噯": tax_before_relief,
+        "鍑忓厤鎵€寰楃◣棰?: relief,
+        "鏈湡搴旂撼绋庨": tax_actual,
+        "鏈勾绱宸查缂?: tax_paid_ytd,
+        "鏈湡搴旇ˉ(閫€)绋庨": tax_payable,
+        "浠庝笟浜烘暟": num_employees,
+        "璧勪骇鎬婚_涓囧厓": total_assets,
+        "鏄惁灏忓瀷寰埄浼佷笟": "鏄? if is_small_low_profit else "鍚?,
+        "_鏀跨瓥渚濇嵁": cit_ref,
+        "_鏀跨瓥鍖洪棿": pol["_meta"]["period"],
     }
 
-    # 附加税汇总（如果有）
+    # 闄勫姞绋庢眹鎬伙紙濡傛灉鏈夛級
     if vat_data:
-        result["增值税应缴"] = vat_data.get("增值税应缴", 0.0)
-        result["附加税合计"] = vat_data.get("附加税合计", 0.0)
-        result["本期税费合计"] = round(
+        result["澧炲€肩◣搴旂即"] = vat_data.get("澧炲€肩◣搴旂即", 0.0)
+        result["闄勫姞绋庡悎璁?] = vat_data.get("闄勫姞绋庡悎璁?, 0.0)
+        result["鏈湡绋庤垂鍚堣"] = round(
             tax_payable
-            + vat_data.get("增值税应缴", 0.0)
-            + vat_data.get("附加税合计", 0.0),
+            + vat_data.get("澧炲€肩◣搴旂即", 0.0)
+            + vat_data.get("闄勫姞绋庡悎璁?, 0.0),
             2
         )
     else:
-        result["增值税应缴"] = 0.0
-        result["附加税合计"] = 0.0
-        result["本期税费合计"] = tax_payable
+        result["澧炲€肩◣搴旂即"] = 0.0
+        result["闄勫姞绋庡悎璁?] = 0.0
+        result["鏈湡绋庤垂鍚堣"] = tax_payable
 
     return result
 
@@ -539,10 +512,8 @@ def get_tax_policy_summary(
     quarter: int = 1,
 ) -> dict:
     """
-    汇总当前企业适用的全部税收优惠政策
-
-    政策描述优先从 tax_policies.json 读取。
-    """
+    姹囨€诲綋鍓嶄紒涓氶€傜敤鐨勫叏閮ㄧ◣鏀朵紭鎯犳斂绛?
+    鏀跨瓥鎻忚堪浼樺厛浠?tax_policies.json 璇诲彇銆?    """
     pol = load_tax_policies()
     vat_pol = pol["vat"]
     sur_pol = pol["surcharges"]
@@ -553,87 +524,86 @@ def get_tax_policy_summary(
 
     policies = []
 
-    # 1. 增值税优惠
+    # 1. 澧炲€肩◣浼樻儬
     if is_small_scale:
         threshold = vat_pol["quarterly_exempt_threshold"]
         revenue_excl = quarter_revenue / (1 + vat_pol["small_scale_nominal_rate"]) if quarter_revenue else 0
         if quarter_revenue <= 0 or revenue_excl <= threshold:
             policies.append({
-                "税种": "增值税",
-                "优惠名称": "小规模纳税人季度免税",
-                "优惠内容": f"季度不含税收入 ≤ {threshold//10000}万元，免征增值税",
-                "政策依据": vat_pol["policy_ref"],
-                "适用条件": f"小规模纳税人 + 季收入≤{threshold//10000}万",
-                "优惠力度": "100% 免征",
-                "减免金额": 0.0,
+                "绋庣": "澧炲€肩◣",
+                "浼樻儬鍚嶇О": "灏忚妯＄撼绋庝汉瀛ｅ害鍏嶇◣",
+                "浼樻儬鍐呭": f"瀛ｅ害涓嶅惈绋庢敹鍏?鈮?{threshold//10000}涓囧厓锛屽厤寰佸鍊肩◣",
+                "鏀跨瓥渚濇嵁": vat_pol["policy_ref"],
+                "閫傜敤鏉′欢": f"灏忚妯＄撼绋庝汉 + 瀛ｆ敹鍏モ墹{threshold//10000}涓?,
+                "浼樻儬鍔涘害": "100% 鍏嶅緛",
+                "鍑忓厤閲戦": 0.0,
             })
         else:
             eff = vat_pol["small_scale_effective_rate"]
             nom = vat_pol["small_scale_nominal_rate"]
             policies.append({
-                "税种": "增值税",
-                "优惠名称": f"小规模纳税人减按{eff*100:.0f}%征收",
-                "优惠内容": f"适用{nom*100:.0f}%征收率的应税销售收入，减按{eff*100:.0f}%征收增值税",
-                "政策依据": vat_pol["policy_ref"],
-                "适用条件": f"小规模纳税人，季收入超{threshold//10000}万",
-                "优惠力度": f"{nom*100:.0f}% → {eff*100:.0f}%（有效降低{round((1-eff/nom)*100):.0f}%）",
-                "减免金额": 0.0,
+                "绋庣": "澧炲€肩◣",
+                "浼樻儬鍚嶇О": f"灏忚妯＄撼绋庝汉鍑忔寜{eff*100:.0f}%寰佹敹",
+                "浼樻儬鍐呭": f"閫傜敤{nom*100:.0f}%寰佹敹鐜囩殑搴旂◣閿€鍞敹鍏ワ紝鍑忔寜{eff*100:.0f}%寰佹敹澧炲€肩◣",
+                "鏀跨瓥渚濇嵁": vat_pol["policy_ref"],
+                "閫傜敤鏉′欢": f"灏忚妯＄撼绋庝汉锛屽鏀跺叆瓒厈threshold//10000}涓?,
+                "浼樻儬鍔涘害": f"{nom*100:.0f}% 鈫?{eff*100:.0f}%锛堟湁鏁堥檷浣巤round((1-eff/nom)*100):.0f}%锛?,
+                "鍑忓厤閲戦": 0.0,
             })
 
-    # 2. 六税两费减半
+    # 2. 鍏◣涓よ垂鍑忓崐
     if sur_pol.get("six_two_half_enabled", True) and (is_small_scale or is_small_low_profit):
         policies.append({
-            "税种": "城建税",
-            "优惠名称": "「六税两费」减半征收",
-            "优惠内容": f"城建税减按实际缴纳增值税的 {sur_pol['urban_construction_effective']*100:.1f}%（原{sur_pol['urban_construction_nominal']*100:.0f}%）",
-            "政策依据": sur_pol["policy_ref"],
-            "适用条件": "小规模纳税人 或 小型微利企业 ✅",
-            "优惠力度": "减免 50%",
-            "减免金额": 0.0,
+            "绋庣": "鍩庡缓绋?,
+            "浼樻儬鍚嶇О": "銆屽叚绋庝袱璐广€嶅噺鍗婂緛鏀?,
+            "浼樻儬鍐呭": f"鍩庡缓绋庡噺鎸夊疄闄呯即绾冲鍊肩◣鐨?{sur_pol['urban_construction_effective']*100:.1f}%锛堝師{sur_pol['urban_construction_nominal']*100:.0f}%锛?,
+            "鏀跨瓥渚濇嵁": sur_pol["policy_ref"],
+            "閫傜敤鏉′欢": "灏忚妯＄撼绋庝汉 鎴?灏忓瀷寰埄浼佷笟 鉁?,
+            "浼樻儬鍔涘害": "鍑忓厤 50%",
+            "鍑忓厤閲戦": 0.0,
         })
         policies.append({
-            "税种": "教育费附加 + 地方教育附加",
-            "优惠名称": "「六税两费」减半征收",
-            "优惠内容": f"教育费附加 {sur_pol['education_effective']*100:.1f}%（原{sur_pol['education_nominal']*100:.0f}%）+ 地方教育附加 {sur_pol['local_education_effective']*100:.0f}%（原{sur_pol['local_education_nominal']*100:.0f}%）",
-            "政策依据": sur_pol["policy_ref"],
-            "适用条件": "小规模纳税人 或 小型微利企业 ✅",
-            "优惠力度": "减免 50%",
-            "减免金额": 0.0,
+            "绋庣": "鏁欒偛璐归檮鍔?+ 鍦版柟鏁欒偛闄勫姞",
+            "浼樻儬鍚嶇О": "銆屽叚绋庝袱璐广€嶅噺鍗婂緛鏀?,
+            "浼樻儬鍐呭": f"鏁欒偛璐归檮鍔?{sur_pol['education_effective']*100:.1f}%锛堝師{sur_pol['education_nominal']*100:.0f}%锛? 鍦版柟鏁欒偛闄勫姞 {sur_pol['local_education_effective']*100:.0f}%锛堝師{sur_pol['local_education_nominal']*100:.0f}%锛?,
+            "鏀跨瓥渚濇嵁": sur_pol["policy_ref"],
+            "閫傜敤鏉′欢": "灏忚妯＄撼绋庝汉 鎴?灏忓瀷寰埄浼佷笟 鉁?,
+            "浼樻儬鍔涘害": "鍑忓厤 50%",
+            "鍑忓厤閲戦": 0.0,
         })
 
-    # 3. 企业所得税小型微利
+    # 3. 浼佷笟鎵€寰楃◣灏忓瀷寰埄
     if is_small_low_profit:
         eff = cit_pol["small_low_profit_effective_rate"]
         std = cit_pol["standard_rate"]
         criteria = cit_pol["small_low_profit_criteria"]
         policies.append({
-            "税种": "企业所得税",
-            "优惠名称": "小型微利企业所得税优惠",
-            "优惠内容": f"减按25%计入应纳税所得额，按20%税率缴纳，实际税负 {eff*100:.0f}%",
-            "政策依据": cit_pol["policy_ref"],
-            "适用条件": f"年利润≤{criteria['max_annual_taxable_income']//10000}万 + 员工≤{criteria['max_employees']}人 + 资产≤{criteria['max_assets_wan']}万 ✅",
-            "优惠力度": f"{std*100:.0f}% → {eff*100:.0f}%（有效降低{round((1-eff/std)*100):.0f}%）",
-            "减免金额": 0.0,
+            "绋庣": "浼佷笟鎵€寰楃◣",
+            "浼樻儬鍚嶇О": "灏忓瀷寰埄浼佷笟鎵€寰楃◣浼樻儬",
+            "浼樻儬鍐呭": f"鍑忔寜25%璁″叆搴旂撼绋庢墍寰楅锛屾寜20%绋庣巼缂寸撼锛屽疄闄呯◣璐?{eff*100:.0f}%",
+            "鏀跨瓥渚濇嵁": cit_pol["policy_ref"],
+            "閫傜敤鏉′欢": f"骞村埄娑︹墹{criteria['max_annual_taxable_income']//10000}涓?+ 鍛樺伐鈮criteria['max_employees']}浜?+ 璧勪骇鈮criteria['max_assets_wan']}涓?鉁?,
+            "浼樻儬鍔涘害": f"{std*100:.0f}% 鈫?{eff*100:.0f}%锛堟湁鏁堥檷浣巤round((1-eff/std)*100):.0f}%锛?,
+            "鍑忓厤閲戦": 0.0,
         })
 
-    # 4. 残保金
-    micro_threshold = def_pol["micro_exempt_threshold"]
+    # 4. 娈嬩繚閲?    micro_threshold = def_pol["micro_exempt_threshold"]
     if num_employees <= micro_threshold:
         policies.append({
-            "税种": "残疾人就业保障金",
-            "优惠名称": "小微企业残保金免征",
-            "优惠内容": f"在职职工总数 ≤ {micro_threshold}人，免征残疾人就业保障金",
-            "政策依据": def_pol["policy_ref"],
-            "适用条件": f"员工 {num_employees}人 ≤ {micro_threshold}人 ✅",
-            "优惠力度": "100% 免征",
-            "减免金额": 0.0,
+            "绋庣": "娈嬬柧浜哄氨涓氫繚闅滈噾",
+            "浼樻儬鍚嶇О": "灏忓井浼佷笟娈嬩繚閲戝厤寰?,
+            "浼樻儬鍐呭": f"鍦ㄨ亴鑱屽伐鎬绘暟 鈮?{micro_threshold}浜猴紝鍏嶅緛娈嬬柧浜哄氨涓氫繚闅滈噾",
+            "鏀跨瓥渚濇嵁": def_pol["policy_ref"],
+            "閫傜敤鏉′欢": f"鍛樺伐 {num_employees}浜?鈮?{micro_threshold}浜?鉁?,
+            "浼樻儬鍔涘害": "100% 鍏嶅緛",
+            "鍑忓厤閲戦": 0.0,
         })
 
     return {
         "policies": policies,
-        "title": "湖北省/武汉市 税收优惠政策适用清单",
-        "valid_until": f"以上政策有效期至 {effective_until}（政策区间：{period_label}）",
-        "tip": "以上优惠政策申报时系统自动识别减免，湖北省已实现「免申即享」，无需额外申请备案。",
+        "title": "婀栧寳鐪?姝︽眽甯?绋庢敹浼樻儬鏀跨瓥閫傜敤娓呭崟",
+        "valid_until": f"浠ヤ笂鏀跨瓥鏈夋晥鏈熻嚦 {effective_until}锛堟斂绛栧尯闂达細{period_label}锛?,
+        "tip": "浠ヤ笂浼樻儬鏀跨瓥鐢虫姤鏃剁郴缁熻嚜鍔ㄨ瘑鍒噺鍏嶏紝婀栧寳鐪佸凡瀹炵幇銆屽厤鐢冲嵆浜€嶏紝鏃犻渶棰濆鐢宠澶囨銆?,
     }
 
 
@@ -645,16 +615,13 @@ def calc_disabled_employment_fund(
     year: int = None,
 ) -> dict:
     """
-    计算残疾人就业保障金（残保金）
-
-    税率参数从 tax_policies.json 读取。
-
-    参数：
-      prev_year_employees:         上年用人单位在职职工人数
-      prev_year_disabled_employees: 上年实际安排的残疾人就业人数
-      prev_year_avg_salary:         上年用人单位在职职工年平均工资（元）
-      local_avg_salary:             当地社会平均工资（元，用于2倍封顶）
-      year:                         申报年份
+    璁＄畻娈嬬柧浜哄氨涓氫繚闅滈噾锛堟畫淇濋噾锛?
+    绋庣巼鍙傛暟浠?tax_policies.json 璇诲彇銆?
+    鍙傛暟锛?      prev_year_employees:         涓婂勾鐢ㄤ汉鍗曚綅鍦ㄨ亴鑱屽伐浜烘暟
+      prev_year_disabled_employees: 涓婂勾瀹為檯瀹夋帓鐨勬畫鐤句汉灏变笟浜烘暟
+      prev_year_avg_salary:         涓婂勾鐢ㄤ汉鍗曚綅鍦ㄨ亴鑱屽伐骞村钩鍧囧伐璧勶紙鍏冿級
+      local_avg_salary:             褰撳湴绀句細骞冲潎宸ヨ祫锛堝厓锛岀敤浜?鍊嶅皝椤讹級
+      year:                         鐢虫姤骞翠唤
     """
     if year is None:
         year = datetime.now().year
@@ -667,33 +634,33 @@ def calc_disabled_employment_fund(
     tiers = def_pol["tier_reduction"]
     def_ref = def_pol["policy_ref"]
 
-    # ===== 1. 小微企业免征 =====
+    # ===== 1. 灏忓井浼佷笟鍏嶅緛 =====
     if prev_year_employees <= micro_threshold:
         return {
-            "申报年度": year,
-            "上年职工人数": prev_year_employees,
-            "上年残疾职工人数": prev_year_disabled_employees,
-            "上年职工年均工资": round(prev_year_avg_salary, 2),
-            "法定安排比例": f"{required_ratio*100:.1f}%",
-            "应安排人数": round(prev_year_employees * required_ratio, 2),
-            "差额人数": 0,
-            "工资计算基数": 0.0,
-            "分档征收比例": "免征",
-            "应缴残保金（全额）": 0.0,
-            "减免金额": 0.0,
-            "是否小微企业免征": "是 ✅",
-            "免征条件": f"在职职工 {prev_year_employees}人 ≤ {micro_threshold}人",
-            "应缴残保金": 0.0,
-            "减免金额": 0.0,
-            "优惠政策": f"小微企业免征（{def_ref}）",
-            "政策依据": def_ref,
-            "申报要求": "仍需零申报（进入电子税务局填写后系统自动计算为0）",
-            "申报截止": f"通常在 {year} 年 7~9 月（以当地残联公告为准）",
-            "计算说明": f"员工 {prev_year_employees}人 ≤ {micro_threshold}人 → 全额免征",
-            "_政策区间": pol["_meta"]["period"],
+            "鐢虫姤骞村害": year,
+            "涓婂勾鑱屽伐浜烘暟": prev_year_employees,
+            "涓婂勾娈嬬柧鑱屽伐浜烘暟": prev_year_disabled_employees,
+            "涓婂勾鑱屽伐骞村潎宸ヨ祫": round(prev_year_avg_salary, 2),
+            "娉曞畾瀹夋帓姣斾緥": f"{required_ratio*100:.1f}%",
+            "搴斿畨鎺掍汉鏁?: round(prev_year_employees * required_ratio, 2),
+            "宸浜烘暟": 0,
+            "宸ヨ祫璁＄畻鍩烘暟": 0.0,
+            "鍒嗘。寰佹敹姣斾緥": "鍏嶅緛",
+            "搴旂即娈嬩繚閲戯紙鍏ㄩ锛?: 0.0,
+            "鍑忓厤閲戦": 0.0,
+            "鏄惁灏忓井浼佷笟鍏嶅緛": "鏄?鉁?,
+            "鍏嶅緛鏉′欢": f"鍦ㄨ亴鑱屽伐 {prev_year_employees}浜?鈮?{micro_threshold}浜?,
+            "搴旂即娈嬩繚閲?: 0.0,
+            "鍑忓厤閲戦": 0.0,
+            "浼樻儬鏀跨瓥": f"灏忓井浼佷笟鍏嶅緛锛坽def_ref}锛?,
+            "鏀跨瓥渚濇嵁": def_ref,
+            "鐢虫姤瑕佹眰": "浠嶉渶闆剁敵鎶ワ紙杩涘叆鐢靛瓙绋庡姟灞€濉啓鍚庣郴缁熻嚜鍔ㄨ绠椾负0锛?,
+            "鐢虫姤鎴": f"閫氬父鍦?{year} 骞?7~9 鏈堬紙浠ュ綋鍦版畫鑱斿叕鍛婁负鍑嗭級",
+            "璁＄畻璇存槑": f"鍛樺伐 {prev_year_employees}浜?鈮?{micro_threshold}浜?鈫?鍏ㄩ鍏嶅緛",
+            "_鏀跨瓥鍖洪棿": pol["_meta"]["period"],
         }
 
-    # ===== 2. 分步计算（>micro_threshold人）=====
+    # ===== 2. 鍒嗘璁＄畻锛?micro_threshold浜猴級=====
     required_disabled = prev_year_employees * required_ratio
     actual_ratio = prev_year_disabled_employees / prev_year_employees if prev_year_employees > 0 else 0
 
@@ -702,17 +669,17 @@ def calc_disabled_employment_fund(
 
     gap = required_disabled - prev_year_disabled_employees
 
-    # 已达标 → 全额免征
+    # 宸茶揪鏍?鈫?鍏ㄩ鍏嶅緛
     if gap <= 0:
         payable = 0.0
         exempted = 0.0
         reduction_rate = 1.0
-        reduction_note = f"已达标安排比例（实际 {actual_ratio:.2%} ≥ {required_ratio*100:.1f}%），免征残保金"
+        reduction_note = f"宸茶揪鏍囧畨鎺掓瘮渚嬶紙瀹為檯 {actual_ratio:.2%} 鈮?{required_ratio*100:.1f}%锛夛紝鍏嶅緛娈嬩繚閲?
         base_amount = 0.0
     else:
         base_amount = gap * calc_salary
 
-        # 分档减征
+        # 鍒嗘。鍑忓緛
         full = tiers["full_compliance"]
         partial = tiers["partial_compliance"]
         non = tiers["non_compliance"]
@@ -728,28 +695,28 @@ def calc_disabled_employment_fund(
         exempted = round(base_amount - payable, 2)
 
     return {
-        "申报年度": year,
-        "上年职工人数": prev_year_employees,
-        "上年残疾职工人数": prev_year_disabled_employees,
-        "上年职工年均工资": round(prev_year_avg_salary, 2),
-        "法定安排比例": f"{required_ratio*100:.1f}%",
-        "应安排人数": round(required_disabled, 4),
-        "实际安排比例": f"{actual_ratio:.2%}",
-        "差额人数": round(gap, 4),
-        "工资计算基数": round(calc_salary, 2),
-        "工资封顶说明": f"当地社平工资×{cap_mult}={salary_cap:,.2f}元" if local_avg_salary > 0 else "未设置封顶",
-        "是否小微企业免征": "否",
-        "应缴残保金（全额）": round(base_amount, 2),
-        "分档征收比例": f"{reduction_rate:.0%}",
-        "分档说明": reduction_note,
-        "应缴残保金": payable,
-        "减免金额": exempted,
-        "优惠政策": reduction_note,
-        "政策依据": def_ref,
-        "申报要求": f"申报并缴纳 {payable:,.2f} 元",
-        "申报截止": f"通常在 {year} 年 7~9 月（以当地残联公告为准）",
-        "计算说明": f"({prev_year_employees}人 × {required_ratio*100:.1f}% - {prev_year_disabled_employees}人) × {calc_salary:,.2f}元 × {reduction_rate:.0%} = {payable:,.2f} 元",
-        "_政策区间": pol["_meta"]["period"],
+        "鐢虫姤骞村害": year,
+        "涓婂勾鑱屽伐浜烘暟": prev_year_employees,
+        "涓婂勾娈嬬柧鑱屽伐浜烘暟": prev_year_disabled_employees,
+        "涓婂勾鑱屽伐骞村潎宸ヨ祫": round(prev_year_avg_salary, 2),
+        "娉曞畾瀹夋帓姣斾緥": f"{required_ratio*100:.1f}%",
+        "搴斿畨鎺掍汉鏁?: round(required_disabled, 4),
+        "瀹為檯瀹夋帓姣斾緥": f"{actual_ratio:.2%}",
+        "宸浜烘暟": round(gap, 4),
+        "宸ヨ祫璁＄畻鍩烘暟": round(calc_salary, 2),
+        "宸ヨ祫灏侀《璇存槑": f"褰撳湴绀惧钩宸ヨ祫脳{cap_mult}={salary_cap:,.2f}鍏? if local_avg_salary > 0 else "鏈缃皝椤?,
+        "鏄惁灏忓井浼佷笟鍏嶅緛": "鍚?,
+        "搴旂即娈嬩繚閲戯紙鍏ㄩ锛?: round(base_amount, 2),
+        "鍒嗘。寰佹敹姣斾緥": f"{reduction_rate:.0%}",
+        "鍒嗘。璇存槑": reduction_note,
+        "搴旂即娈嬩繚閲?: payable,
+        "鍑忓厤閲戦": exempted,
+        "浼樻儬鏀跨瓥": reduction_note,
+        "鏀跨瓥渚濇嵁": def_ref,
+        "鐢虫姤瑕佹眰": f"鐢虫姤骞剁即绾?{payable:,.2f} 鍏?,
+        "鐢虫姤鎴": f"閫氬父鍦?{year} 骞?7~9 鏈堬紙浠ュ綋鍦版畫鑱斿叕鍛婁负鍑嗭級",
+        "璁＄畻璇存槑": f"({prev_year_employees}浜?脳 {required_ratio*100:.1f}% - {prev_year_disabled_employees}浜? 脳 {calc_salary:,.2f}鍏?脳 {reduction_rate:.0%} = {payable:,.2f} 鍏?,
+        "_鏀跨瓥鍖洪棿": pol["_meta"]["period"],
     }
 
 
@@ -765,20 +732,12 @@ def calc_stamp_duty(
     tax_year: int = None,
 ) -> dict:
     """
-    计算印花税
-
-    税率参数从 tax_policies.json 读取，按申报年度自动匹配。
-
-    参数：
-      registered_capital:  本期实收资本变动（元）
-      capital_increase:    本期增资额（元）
-      capital_reserve:     资本公积变动（元）
-      purchase_amount:     本期购销合同金额（元）
-      loan_amount:         本期借款合同金额（元）
-      tech_amount:         本期技术合同金额（元）
-      property_lease_amount: 本期财产租赁合同金额（元）
-      is_small_low_profit: 是否小型微利企业
-      tax_year:            申报年度
+    璁＄畻鍗拌姳绋?
+    绋庣巼鍙傛暟浠?tax_policies.json 璇诲彇锛屾寜鐢虫姤骞村害鑷姩鍖归厤銆?
+    鍙傛暟锛?      registered_capital:  鏈湡瀹炴敹璧勬湰鍙樺姩锛堝厓锛?      capital_increase:    鏈湡澧炶祫棰濓紙鍏冿級
+      capital_reserve:     璧勬湰鍏Н鍙樺姩锛堝厓锛?      purchase_amount:     鏈湡璐攢鍚堝悓閲戦锛堝厓锛?      loan_amount:         鏈湡鍊熸鍚堝悓閲戦锛堝厓锛?      tech_amount:         鏈湡鎶€鏈悎鍚岄噾棰濓紙鍏冿級
+      property_lease_amount: 鏈湡璐骇绉熻祦鍚堝悓閲戦锛堝厓锛?      is_small_low_profit: 鏄惁灏忓瀷寰埄浼佷笟
+      tax_year:            鐢虫姤骞村害
     """
     pol = load_tax_policies(tax_year if tax_year else None)
     sd_pol = pol["stamp_duty"]
@@ -787,109 +746,108 @@ def calc_stamp_duty(
     categories = sd_pol["categories"]
     sd_ref = sd_pol["policy_ref"]
 
-    # ===== 各税目计算 =====
+    # ===== 鍚勭◣鐩绠?=====
     items = []
 
     def _fmt_rate(nominal, effective):
-        """格式化税率显示"""
-        return f"{nominal*100:.3f}%（万分之{nominal*10000:.1f}）", f"{effective*100:.4f}%（万分之{effective*10000:.2f}）"
+        """鏍煎紡鍖栫◣鐜囨樉绀?""
+        return f"{nominal*100:.3f}%锛堜竾鍒嗕箣{nominal*10000:.1f}锛?, f"{effective*100:.4f}%锛堜竾鍒嗕箣{effective*10000:.2f}锛?
 
-    # 1. 资金账簿
+    # 1. 璧勯噾璐︾翱
     cap_cat = categories["capital_book"]
     capital_base = registered_capital + capital_increase + capital_reserve
     capital_tax = round(capital_base * cap_cat["effective_rate"], 2)
     if capital_base > 0:
         nr, er = _fmt_rate(cap_cat["nominal_rate"], cap_cat["effective_rate"])
         items.append({
-            "税目": cap_cat["name"],
-            "品类": cap_cat["basis"],
-            "名义税率": nr,
-            "优惠后税率": er,
-            "计税基础（元）": capital_base,
-            "应纳税额（元）": capital_tax,
-            "说明": f"注册资本到位/增资 {capital_base:,.2f} 元" + (" 六税两费减半" if half_enabled else ""),
+            "绋庣洰": cap_cat["name"],
+            "鍝佺被": cap_cat["basis"],
+            "鍚嶄箟绋庣巼": nr,
+            "浼樻儬鍚庣◣鐜?: er,
+            "璁＄◣鍩虹锛堝厓锛?: capital_base,
+            "搴旂撼绋庨锛堝厓锛?: capital_tax,
+            "璇存槑": f"娉ㄥ唽璧勬湰鍒颁綅/澧炶祫 {capital_base:,.2f} 鍏? + (" 鍏◣涓よ垂鍑忓崐" if half_enabled else ""),
         })
 
-    # 2. 购销合同
+    # 2. 璐攢鍚堝悓
     pur_cat = categories["purchase_contract"]
     purchase_tax = round(purchase_amount * pur_cat["effective_rate"], 2)
     if purchase_amount > 0:
         nr, er = _fmt_rate(pur_cat["nominal_rate"], pur_cat["effective_rate"])
         items.append({
-            "税目": pur_cat["name"],
-            "品类": pur_cat["basis"],
-            "名义税率": nr,
-            "优惠后税率": er,
-            "计税基础（元）": purchase_amount,
-            "应纳税额（元）": purchase_tax,
-            "说明": f"购销金额 {purchase_amount:,.2f} 元" + (" 六税两费减半" if half_enabled else ""),
+            "绋庣洰": pur_cat["name"],
+            "鍝佺被": pur_cat["basis"],
+            "鍚嶄箟绋庣巼": nr,
+            "浼樻儬鍚庣◣鐜?: er,
+            "璁＄◣鍩虹锛堝厓锛?: purchase_amount,
+            "搴旂撼绋庨锛堝厓锛?: purchase_tax,
+            "璇存槑": f"璐攢閲戦 {purchase_amount:,.2f} 鍏? + (" 鍏◣涓よ垂鍑忓崐" if half_enabled else ""),
         })
 
-    # 3. 借款合同
+    # 3. 鍊熸鍚堝悓
     loan_cat = categories["loan_contract"]
     loan_tax = round(loan_amount * loan_cat["effective_rate"], 2)
     if loan_amount > 0:
         nr, er = _fmt_rate(loan_cat["nominal_rate"], loan_cat["effective_rate"])
         items.append({
-            "税目": loan_cat["name"],
-            "品类": loan_cat["basis"],
-            "名义税率": nr,
-            "优惠后税率": er,
-            "计税基础（元）": loan_amount,
-            "应纳税额（元）": loan_tax,
-            "说明": f"借款金额 {loan_amount:,.2f} 元" + (" 六税两费减半" if half_enabled else ""),
+            "绋庣洰": loan_cat["name"],
+            "鍝佺被": loan_cat["basis"],
+            "鍚嶄箟绋庣巼": nr,
+            "浼樻儬鍚庣◣鐜?: er,
+            "璁＄◣鍩虹锛堝厓锛?: loan_amount,
+            "搴旂撼绋庨锛堝厓锛?: loan_tax,
+            "璇存槑": f"鍊熸閲戦 {loan_amount:,.2f} 鍏? + (" 鍏◣涓よ垂鍑忓崐" if half_enabled else ""),
         })
 
-    # 4. 技术合同
-    tech_cat = categories["tech_contract"]
+    # 4. 鎶€鏈悎鍚?    tech_cat = categories["tech_contract"]
     tech_tax = round(tech_amount * tech_cat["effective_rate"], 2)
     if tech_amount > 0:
         nr, er = _fmt_rate(tech_cat["nominal_rate"], tech_cat["effective_rate"])
         items.append({
-            "税目": tech_cat["name"],
-            "品类": tech_cat["basis"],
-            "名义税率": nr,
-            "优惠后税率": er,
-            "计税基础（元）": tech_amount,
-            "应纳税额（元）": tech_tax,
-            "说明": f"技术合同金额 {tech_amount:,.2f} 元" + (" 六税两费减半" if half_enabled else ""),
+            "绋庣洰": tech_cat["name"],
+            "鍝佺被": tech_cat["basis"],
+            "鍚嶄箟绋庣巼": nr,
+            "浼樻儬鍚庣◣鐜?: er,
+            "璁＄◣鍩虹锛堝厓锛?: tech_amount,
+            "搴旂撼绋庨锛堝厓锛?: tech_tax,
+            "璇存槑": f"鎶€鏈悎鍚岄噾棰?{tech_amount:,.2f} 鍏? + (" 鍏◣涓よ垂鍑忓崐" if half_enabled else ""),
         })
 
-    # 5. 财产租赁合同
+    # 5. 璐骇绉熻祦鍚堝悓
     prop_cat = categories["property_lease"]
     property_tax = round(property_lease_amount * prop_cat["effective_rate"], 2)
     if property_lease_amount > 0:
         nr, er = _fmt_rate(prop_cat["nominal_rate"], prop_cat["effective_rate"])
         items.append({
-            "税目": prop_cat["name"],
-            "品类": prop_cat["basis"],
-            "名义税率": nr,
-            "优惠后税率": er,
-            "计税基础（元）": property_lease_amount,
-            "应纳税额（元）": property_tax,
-            "说明": f"租赁金额 {property_lease_amount:,.2f} 元" + (" 六税两费减半" if half_enabled else ""),
+            "绋庣洰": prop_cat["name"],
+            "鍝佺被": prop_cat["basis"],
+            "鍚嶄箟绋庣巼": nr,
+            "浼樻儬鍚庣◣鐜?: er,
+            "璁＄◣鍩虹锛堝厓锛?: property_lease_amount,
+            "搴旂撼绋庨锛堝厓锛?: property_tax,
+            "璇存槑": f"绉熻祦閲戦 {property_lease_amount:,.2f} 鍏? + (" 鍏◣涓よ垂鍑忓崐" if half_enabled else ""),
         })
 
-    total_stamp_duty = round(sum(i["应纳税额（元）"] for i in items), 2)
-    nominal_total = round(sum(i["计税基础（元）"] * cats_nominal_rate(categories, i["税目"]) for i in items), 2)
+    total_stamp_duty = round(sum(i["搴旂撼绋庨锛堝厓锛?] for i in items), 2)
+    nominal_total = round(sum(i["璁＄◣鍩虹锛堝厓锛?] * cats_nominal_rate(categories, i["绋庣洰"]) for i in items), 2)
     relief = round(nominal_total - total_stamp_duty, 2)
 
     return {
-        "明细": items,
-        "税目数量": len(items),
-        "印花税合计（名义）": nominal_total,
-        "六税两费减免": relief,
-        "印花税合计（应缴）": total_stamp_duty,
-        "是否六税两费减半": "是" if half_enabled else "否",
-        "政策依据": sd_ref,
-        "申报方式": "按次或按期汇总 → 湖北省电子税务局 → 「印花税申报」",
-        "提示": "资金账簿仅在初始到位或增资时缴纳，已缴部分不重复征收",
-        "_政策区间": pol["_meta"]["period"],
+        "鏄庣粏": items,
+        "绋庣洰鏁伴噺": len(items),
+        "鍗拌姳绋庡悎璁★紙鍚嶄箟锛?: nominal_total,
+        "鍏◣涓よ垂鍑忓厤": relief,
+        "鍗拌姳绋庡悎璁★紙搴旂即锛?: total_stamp_duty,
+        "鏄惁鍏◣涓よ垂鍑忓崐": "鏄? if half_enabled else "鍚?,
+        "鏀跨瓥渚濇嵁": sd_ref,
+        "鐢虫姤鏂瑰紡": "鎸夋鎴栨寜鏈熸眹鎬?鈫?婀栧寳鐪佺數瀛愮◣鍔″眬 鈫?銆屽嵃鑺辩◣鐢虫姤銆?,
+        "鎻愮ず": "璧勯噾璐︾翱浠呭湪鍒濆鍒颁綅鎴栧璧勬椂缂寸撼锛屽凡缂撮儴鍒嗕笉閲嶅寰佹敹",
+        "_鏀跨瓥鍖洪棿": pol["_meta"]["period"],
     }
 
 
 def cats_nominal_rate(categories: dict, name: str) -> float:
-    """从 categories 反向查找名义税率（用于减免金额计算）"""
+    """浠?categories 鍙嶅悜鏌ユ壘鍚嶄箟绋庣巼锛堢敤浜庡噺鍏嶉噾棰濊绠楋級"""
     for key, cat in categories.items():
         if cat["name"] == name:
             return cat["nominal_rate"]
@@ -897,289 +855,285 @@ def cats_nominal_rate(categories: dict, name: str) -> float:
 
 
 def format_corporate_tax_report(result: dict, quarter: int, year: int, vat_data: dict = None) -> str:
-    """生成企业所得税及税费测算申报说明文字（匹配A200000格式）"""
+    """鐢熸垚浼佷笟鎵€寰楃◣鍙婄◣璐规祴绠楃敵鎶ヨ鏄庢枃瀛楋紙鍖归厤A200000鏍煎紡锛?""
     lines = [
         f"{'='*70}",
-        f"  {year}年第{quarter}季度 企业所得税预缴 + 增值税及附加测算说明",
-        f"  （匹配 A200000 申报表格式 | 含增值税/城建税/教育费附加）",
+        f"  {year}骞寸{quarter}瀛ｅ害 浼佷笟鎵€寰楃◣棰勭即 + 澧炲€肩◣鍙婇檮鍔犳祴绠楄鏄?,
+        f"  锛堝尮閰?A200000 鐢虫姤琛ㄦ牸寮?| 鍚鍊肩◣/鍩庡缓绋?鏁欒偛璐归檮鍔狅級",
         f"{'='*70}",
         "",
-        f"一、基本信息",
-        f"  纳税人名称：    武汉金艳龙科技有限公司",
-        f"  所属期间：      {year}年{[1,4,7,10][quarter-1]}月01日 至 {year}年{[3,6,9,12][quarter-1]}月31日",
-        f"  企业类型：     {result['是否小型微利企业']}（小型微利企业）",
-        f"  从业人数：     {result['从业人数']} 人",
-        f"  资产总额：     {result['资产总额_万元']:.2f} 万元",
+        f"涓€銆佸熀鏈俊鎭?,
+        f"  绾崇◣浜哄悕绉帮細    姝︽眽閲戣壋榫欑鎶€鏈夐檺鍏徃",
+        f"  鎵€灞炴湡闂达細      {year}骞磠[1,4,7,10][quarter-1]}鏈?1鏃?鑷?{year}骞磠[3,6,9,12][quarter-1]}鏈?1鏃?,
+        f"  浼佷笟绫诲瀷锛?    {result['鏄惁灏忓瀷寰埄浼佷笟']}锛堝皬鍨嬪井鍒╀紒涓氾級",
+        f"  浠庝笟浜烘暟锛?    {result['浠庝笟浜烘暟']} 浜?,
+        f"  璧勪骇鎬婚锛?    {result['璧勪骇鎬婚_涓囧厓']:.2f} 涓囧厓",
         "",
-        f"{'─'*50}",
-        f"二、收入成本利润（申报表第1~3行）",
-        f"{'─'*50}",
-        f"  第1行 营业收入：       {result['营业收入']:>15,.2f} 元",
-        f"  第2行 营业成本：       {result['营业成本']:>15,.2f} 元",
-        f"  第3行 利润总额：       {result['利润总额']:>15,.2f} 元",
+        f"{'鈹€'*50}",
+        f"浜屻€佹敹鍏ユ垚鏈埄娑︼紙鐢虫姤琛ㄧ1~3琛岋級",
+        f"{'鈹€'*50}",
+        f"  绗?琛?钀ヤ笟鏀跺叆锛?      {result['钀ヤ笟鏀跺叆']:>15,.2f} 鍏?,
+        f"  绗?琛?钀ヤ笟鎴愭湰锛?      {result['钀ヤ笟鎴愭湰']:>15,.2f} 鍏?,
+        f"  绗?琛?鍒╂鼎鎬婚锛?      {result['鍒╂鼎鎬婚']:>15,.2f} 鍏?,
         "",
-        f"{'─'*50}",
-        f"三、应纳税所得额计算（申报表第4~8行）",
-        f"{'─'*50}",
-        f"  第4行 特定业务调整：    {0:>15,.2f}",
-        f"  第5行 不征税收入：       {0:>15,.2f}",
-        f"  第6行 固定资产折旧调整： {0:>15,.2f}",
-        f"  第7行 弥补以前年度亏损： {0:>15,.2f}",
-        f"  ───────────────────────────────",
-        f"  第8行 实际利润额：       {result['实际利润额']:>15,.2f} 元",
+        f"{'鈹€'*50}",
+        f"涓夈€佸簲绾崇◣鎵€寰楅璁＄畻锛堢敵鎶ヨ〃绗?~8琛岋級",
+        f"{'鈹€'*50}",
+        f"  绗?琛?鐗瑰畾涓氬姟璋冩暣锛?   {0:>15,.2f}",
+        f"  绗?琛?涓嶅緛绋庢敹鍏ワ細       {0:>15,.2f}",
+        f"  绗?琛?鍥哄畾璧勪骇鎶樻棫璋冩暣锛?{0:>15,.2f}",
+        f"  绗?琛?寮ヨˉ浠ュ墠骞村害浜忔崯锛?{0:>15,.2f}",
+        f"  鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€",
+        f"  绗?琛?瀹為檯鍒╂鼎棰濓細       {result['瀹為檯鍒╂鼎棰?]:>15,.2f} 鍏?,
         "",
-        f"{'─'*50}",
-        f"四、税款计算（申报表第9~13行）",
-        f"{'─'*50}",
-        f"  第9行 税率（25%）：       {'25%':>15s}",
-        f"  第10行 应纳所得税额：     {result['应纳税额_标准']:>15,.2f} 元",
-        f"  第11行 减免所得税额：     {result['减免所得税额']:>15,.2f} 元",
-        f"  第12行 本年累计已预缴：   {result['本年累计已预缴']:>15,.2f} 元",
-        f"  ───────────────────────────────",
-        f"  第13行 本期应补(退)税额： {result['本期应补(退)税额']:>15,.2f} 元",
+        f"{'鈹€'*50}",
+        f"鍥涖€佺◣娆捐绠楋紙鐢虫姤琛ㄧ9~13琛岋級",
+        f"{'鈹€'*50}",
+        f"  绗?琛?绋庣巼锛?5%锛夛細       {'25%':>15s}",
+        f"  绗?0琛?搴旂撼鎵€寰楃◣棰濓細     {result['搴旂撼绋庨_鏍囧噯']:>15,.2f} 鍏?,
+        f"  绗?1琛?鍑忓厤鎵€寰楃◣棰濓細     {result['鍑忓厤鎵€寰楃◣棰?]:>15,.2f} 鍏?,
+        f"  绗?2琛?鏈勾绱宸查缂达細   {result['鏈勾绱宸查缂?]:>15,.2f} 鍏?,
+        f"  鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€",
+        f"  绗?3琛?鏈湡搴旇ˉ(閫€)绋庨锛?{result['鏈湡搴旇ˉ(閫€)绋庨']:>15,.2f} 鍏?,
         "",
-        f"{'─'*50}",
-        f"五、计算说明",
-        f"{'─'*50}",
+        f"{'鈹€'*50}",
+        f"浜斻€佽绠楄鏄?,
+        f"{'鈹€'*50}",
     ]
 
-    if result['利润总额'] <= 0:
+    if result['鍒╂鼎鎬婚'] <= 0:
         lines.extend([
-            f"  【本期亏损】利润总额为 {result['利润总额']:,.2f} 元（负数），",
-            f"             实际利润额取0或保留负数，无需缴纳企业所得税。",
+            f"  銆愭湰鏈熶簭鎹熴€戝埄娑︽€婚涓?{result['鍒╂鼎鎬婚']:,.2f} 鍏冿紙璐熸暟锛夛紝",
+            f"             瀹為檯鍒╂鼎棰濆彇0鎴栦繚鐣欒礋鏁帮紝鏃犻渶缂寸撼浼佷笟鎵€寰楃◣銆?,
             f"",
-            f"  第10行应纳所得税额 = max(实际利润额, 0) × 25% = 0 元",
-            f"  第11行减免所得税额 = 0 元（亏损无减免）",
-            f"  第13行本期应补退税额 = 0 元",
+            f"  绗?0琛屽簲绾虫墍寰楃◣棰?= max(瀹為檯鍒╂鼎棰? 0) 脳 25% = 0 鍏?,
+            f"  绗?1琛屽噺鍏嶆墍寰楃◣棰?= 0 鍏冿紙浜忔崯鏃犲噺鍏嶏級",
+            f"  绗?3琛屾湰鏈熷簲琛ラ€€绋庨 = 0 鍏?,
         ])
     else:
-        if result['是否小型微利企业'] == '是':
+        if result['鏄惁灏忓瀷寰埄浼佷笟'] == '鏄?:
             lines.extend([
-                f"  【小型微利企业优惠】2024-2027年政策：",
-                f"  - 减按25%计入应纳税所得额，按20%税率征收",
-                f"  - 实际税负 = 25% × 20% = 5%",
+                f"  銆愬皬鍨嬪井鍒╀紒涓氫紭鎯犮€?024-2027骞存斂绛栵細",
+                f"  - 鍑忔寜25%璁″叆搴旂撼绋庢墍寰楅锛屾寜20%绋庣巼寰佹敹",
+                f"  - 瀹為檯绋庤礋 = 25% 脳 20% = 5%",
                 f"",
-                f"  第10行应纳所得税额 = {result['应纳税所得额']:,.2f} × 25% = {result['应纳税额_标准']:,.2f} 元",
-                f"  第11行减免所得税额 = {result['应纳税额_标准']:,.2f} - {result['本期应纳税额']:,.2f} = {result['减免所得税额']:,.2f} 元",
-                f"  第13行本期应补退税额 = {result['本期应纳税额']:,.2f} - {result['本年累计已预缴']:,.2f} = {result['本期应补(退)税额']:,.2f} 元",
+                f"  绗?0琛屽簲绾虫墍寰楃◣棰?= {result['搴旂撼绋庢墍寰楅']:,.2f} 脳 25% = {result['搴旂撼绋庨_鏍囧噯']:,.2f} 鍏?,
+                f"  绗?1琛屽噺鍏嶆墍寰楃◣棰?= {result['搴旂撼绋庨_鏍囧噯']:,.2f} - {result['鏈湡搴旂撼绋庨']:,.2f} = {result['鍑忓厤鎵€寰楃◣棰?]:,.2f} 鍏?,
+                f"  绗?3琛屾湰鏈熷簲琛ラ€€绋庨 = {result['鏈湡搴旂撼绋庨']:,.2f} - {result['鏈勾绱宸查缂?]:,.2f} = {result['鏈湡搴旇ˉ(閫€)绋庨']:,.2f} 鍏?,
             ])
         else:
             lines.extend([
-                f"  【一般企业】适用标准税率 25%",
-                f"  第10行应纳所得税额 = {result['应纳税所得额']:,.2f} × 25% = {result['应纳税额_标准']:,.2f} 元",
-                f"  第11行减免所得税额 = 0 元",
-                f"  第13行本期应补退税额 = {result['本期应纳税额']:,.2f} 元",
+                f"  銆愪竴鑸紒涓氥€戦€傜敤鏍囧噯绋庣巼 25%",
+                f"  绗?0琛屽簲绾虫墍寰楃◣棰?= {result['搴旂撼绋庢墍寰楅']:,.2f} 脳 25% = {result['搴旂撼绋庨_鏍囧噯']:,.2f} 鍏?,
+                f"  绗?1琛屽噺鍏嶆墍寰楃◣棰?= 0 鍏?,
+                f"  绗?3琛屾湰鏈熷簲琛ラ€€绋庨 = {result['鏈湡搴旂撼绋庨']:,.2f} 鍏?,
             ])
 
     lines.extend([
         "",
-        f"{'─'*50}",
-        f"六、增值税及附加税测算（参考）",
-        f"{'─'*50}",
+        f"{'鈹€'*50}",
+        f"鍏€佸鍊肩◣鍙婇檮鍔犵◣娴嬬畻锛堝弬鑰冿級",
+        f"{'鈹€'*50}",
     ])
 
     if vat_data:
         lines.extend([
-            f"  增值税类型：    {'小规模纳税人3%' if vat_data['是否小规模纳税人']=='是' else '一般纳税人'}",
-            f"  季度含税收入：  {vat_data['季度含税收入']:>15,.2f} 元",
-            f"  季度不含税收入：{vat_data['季度不含税收入']:>15,.2f} 元",
-            f"  增值税说明：    {vat_data['增值税免税说明']}",
-            f"  增值税应缴：    {vat_data['增值税应缴']:>15,.2f} 元",
-            f"  ───────────────────────────────",
-            f"  城建税(7%)：    {vat_data['城建税(7%)']:>15,.2f} 元",
-            f"  教育费附加(3%)：{vat_data['教育费附加(3%)']:>15,.2f} 元",
-            f"  地方教育附加(2%)：{vat_data['地方教育附加(2%)']:>13,.2f} 元",
-            f"  附加税合计：    {vat_data['附加税合计']:>15,.2f} 元",
-            f"  ───────────────────────────────",
-            f"  增值税+附加合计：{vat_data['增值税及附加合计']:>14,.2f} 元",
+            f"  澧炲€肩◣绫诲瀷锛?   {'灏忚妯＄撼绋庝汉3%' if vat_data['鏄惁灏忚妯＄撼绋庝汉']=='鏄? else '涓€鑸撼绋庝汉'}",
+            f"  瀛ｅ害鍚◣鏀跺叆锛? {vat_data['瀛ｅ害鍚◣鏀跺叆']:>15,.2f} 鍏?,
+            f"  瀛ｅ害涓嶅惈绋庢敹鍏ワ細{vat_data['瀛ｅ害涓嶅惈绋庢敹鍏?]:>15,.2f} 鍏?,
+            f"  澧炲€肩◣璇存槑锛?   {vat_data['澧炲€肩◣鍏嶇◣璇存槑']}",
+            f"  澧炲€肩◣搴旂即锛?   {vat_data['澧炲€肩◣搴旂即']:>15,.2f} 鍏?,
+            f"  鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€",
+            f"  鍩庡缓绋?7%)锛?   {vat_data['鍩庡缓绋?7%)']:>15,.2f} 鍏?,
+            f"  鏁欒偛璐归檮鍔?3%)锛歿vat_data['鏁欒偛璐归檮鍔?3%)']:>15,.2f} 鍏?,
+            f"  鍦版柟鏁欒偛闄勫姞(2%)锛歿vat_data['鍦版柟鏁欒偛闄勫姞(2%)']:>13,.2f} 鍏?,
+            f"  闄勫姞绋庡悎璁★細    {vat_data['闄勫姞绋庡悎璁?]:>15,.2f} 鍏?,
+            f"  鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€",
+            f"  澧炲€肩◣+闄勫姞鍚堣锛歿vat_data['澧炲€肩◣鍙婇檮鍔犲悎璁?]:>14,.2f} 鍏?,
         ])
     else:
-        lines.append("  （未录入增值税信息，请在申报界面填写季度收入后测算）")
+        lines.append("  锛堟湭褰曞叆澧炲€肩◣淇℃伅锛岃鍦ㄧ敵鎶ョ晫闈㈠～鍐欏搴︽敹鍏ュ悗娴嬬畻锛?)
 
     lines.extend([
         "",
-        f"{'─'*50}",
-        f"七、本期税费汇总",
-        f"{'─'*50}",
-        f"  企业所得税（本期应补缴）：{result['本期应补(退)税额']:>12,.2f} 元",
-        f"  增值税应缴：              {result.get('增值税应缴', 0.0):>12,.2f} 元",
-        f"  附加税合计：              {result.get('附加税合计', 0.0):>12,.2f} 元",
-        f"  ───────────────────────────────",
-        f"  本期税费合计：            {result.get('本期税费合计', result['本期应补(退)税额']):>12,.2f} 元",
+        f"{'鈹€'*50}",
+        f"涓冦€佹湰鏈熺◣璐规眹鎬?,
+        f"{'鈹€'*50}",
+        f"  浼佷笟鎵€寰楃◣锛堟湰鏈熷簲琛ョ即锛夛細{result['鏈湡搴旇ˉ(閫€)绋庨']:>12,.2f} 鍏?,
+        f"  澧炲€肩◣搴旂即锛?             {result.get('澧炲€肩◣搴旂即', 0.0):>12,.2f} 鍏?,
+        f"  闄勫姞绋庡悎璁★細              {result.get('闄勫姞绋庡悎璁?, 0.0):>12,.2f} 鍏?,
+        f"  鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€",
+        f"  鏈湡绋庤垂鍚堣锛?           {result.get('鏈湡绋庤垂鍚堣', result['鏈湡搴旇ˉ(閫€)绋庨']):>12,.2f} 鍏?,
         "",
-        f"{'─'*50}",
-        f"八、申报提醒",
-        f"{'─'*50}",
-        "  1. 请核对利润总额与利润表（小企业会计准则）一致；",
-        "  2. 小型微利企业优惠由系统自动判别，无需额外备案；",
-        "  3. 申报截止时间为季度终了后15日内（4月、7月、10月、次年1月15日前）；",
-        "  4. 请及时在国家税务总局湖北省电子税务局完成预缴申报。",
+        f"{'鈹€'*50}",
+        f"鍏€佺敵鎶ユ彁閱?,
+        f"{'鈹€'*50}",
+        "  1. 璇锋牳瀵瑰埄娑︽€婚涓庡埄娑﹁〃锛堝皬浼佷笟浼氳鍑嗗垯锛変竴鑷达紱",
+        "  2. 灏忓瀷寰埄浼佷笟浼樻儬鐢辩郴缁熻嚜鍔ㄥ垽鍒紝鏃犻渶棰濆澶囨锛?,
+        "  3. 鐢虫姤鎴鏃堕棿涓哄搴︾粓浜嗗悗15鏃ュ唴锛?鏈堛€?鏈堛€?0鏈堛€佹骞?鏈?5鏃ュ墠锛夛紱",
+        "  4. 璇峰強鏃跺湪鍥藉绋庡姟鎬诲眬婀栧寳鐪佺數瀛愮◣鍔″眬瀹屾垚棰勭即鐢虫姤銆?,
         "",
         f"{'='*70}",
-        f"  —— 由 金艳龙AI税务助手 自动生成 · {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        f"  鈥斺€?鐢?閲戣壋榫橝I绋庡姟鍔╂墜 鑷姩鐢熸垚 路 {datetime.now().strftime('%Y-%m-%d %H:%M')}",
         f"{'='*70}",
     ])
     return "\n".join(lines)
 
 
 # ===============================================
-#  银行流水自动分类（遵循小企业会计准则）
-# ===============================================
+#  閾惰娴佹按鑷姩鍒嗙被锛堥伒寰皬浼佷笟浼氳鍑嗗垯锛?# ===============================================
 
 def classify_bank_transaction(desc: str) -> dict:
     """
-    根据银行流水摘要，自动分类到小企业会计准则利润表项目
-    返回：{"category": "营业收入", "pl_item": "营业收入", "影响利润": "收入"}
+    鏍规嵁閾惰娴佹按鎽樿锛岃嚜鍔ㄥ垎绫诲埌灏忎紒涓氫細璁″噯鍒欏埄娑﹁〃椤圭洰
+    杩斿洖锛歿"category": "钀ヤ笟鏀跺叆", "pl_item": "钀ヤ笟鏀跺叆", "褰卞搷鍒╂鼎": "鏀跺叆"}
     """
     desc = str(desc).lower()
     
-    # 一、营业收入（利润表第1行）
-    if any(k in desc for k in ["货款", "销售收入", "服务费", "咨询费", "收款", 
-                               "主营业务收入", "其他业务收入", "销售", "服务收入"]):
+    # 涓€銆佽惀涓氭敹鍏ワ紙鍒╂鼎琛ㄧ1琛岋級
+    if any(k in desc for k in ["璐ф", "閿€鍞敹鍏?, "鏈嶅姟璐?, "鍜ㄨ璐?, "鏀舵", 
+                               "涓昏惀涓氬姟鏀跺叆", "鍏朵粬涓氬姟鏀跺叆", "閿€鍞?, "鏈嶅姟鏀跺叆"]):
         return {
-            "category": "营业收入",
-            "pl_item": "营业收入",
-            "type": "收入",
-            "account": "主营业务收入"
+            "category": "钀ヤ笟鏀跺叆",
+            "pl_item": "钀ヤ笟鏀跺叆",
+            "type": "鏀跺叆",
+            "account": "涓昏惀涓氬姟鏀跺叆"
         }
     
-    # 二、营业成本（利润表第2行）
-    elif any(k in desc for k in ["采购", "进货", "材料成本", "主营业务成本", 
-                                 "材料", "成本", "进货成本"]):
+    # 浜屻€佽惀涓氭垚鏈紙鍒╂鼎琛ㄧ2琛岋級
+    elif any(k in desc for k in ["閲囪喘", "杩涜揣", "鏉愭枡鎴愭湰", "涓昏惀涓氬姟鎴愭湰", 
+                                 "鏉愭枡", "鎴愭湰", "杩涜揣鎴愭湰"]):
         return {
-            "category": "营业成本",
-            "pl_item": "营业成本",
-            "type": "支出",
-            "account": "主营业务成本"
+            "category": "钀ヤ笟鎴愭湰",
+            "pl_item": "钀ヤ笟鎴愭湰",
+            "type": "鏀嚭",
+            "account": "涓昏惀涓氬姟鎴愭湰"
         }
     
-    # 三、税金及附加（利润表第3行）
-    elif any(k in desc for k in ["税金", "附加费", "城建税", "教育费附加", 
-                                 "地方教育附加", "印花税", "房产税", "土地使用税"]):
+    # 涓夈€佺◣閲戝強闄勫姞锛堝埄娑﹁〃绗?琛岋級
+    elif any(k in desc for k in ["绋庨噾", "闄勫姞璐?, "鍩庡缓绋?, "鏁欒偛璐归檮鍔?, 
+                                 "鍦版柟鏁欒偛闄勫姞", "鍗拌姳绋?, "鎴夸骇绋?, "鍦熷湴浣跨敤绋?]):
         return {
-            "category": "税金及附加",
-            "pl_item": "税金及附加",
-            "type": "支出",
-            "account": "税金及附加"
+            "category": "绋庨噾鍙婇檮鍔?,
+            "pl_item": "绋庨噾鍙婇檮鍔?,
+            "type": "鏀嚭",
+            "account": "绋庨噾鍙婇檮鍔?
         }
     
-    # 四、管理费用（利润表第5行）
-    elif any(k in desc for k in ["工资", "社保", "公积金", "福利费", "奖金", 
-                                 "养老金", "医保", "失业保险", "工伤保险"]):
+    # 鍥涖€佺鐞嗚垂鐢紙鍒╂鼎琛ㄧ5琛岋級
+    elif any(k in desc for k in ["宸ヨ祫", "绀句繚", "鍏Н閲?, "绂忓埄璐?, "濂栭噾", 
+                                 "鍏昏€侀噾", "鍖讳繚", "鍖荤枟淇濋櫓", "鐢熻偛淇濋櫓", "澶变笟淇濋櫓", "宸ヤ激淇濋櫓"]):
         return {
-            "category": "管理费用-人工",
-            "pl_item": "管理费用",
-            "type": "支出",
-            "account": "管理费用-工资社保"
+            "category": "绠＄悊璐圭敤-浜哄伐",
+            "pl_item": "绠＄悊璐圭敤",
+            "type": "鏀嚭",
+            "account": "绠＄悊璐圭敤-宸ヨ祫绀句繚"
         }
     
-    elif any(k in desc for k in ["水电", "物业", "房租", "租赁", "办公用品", 
-                                 "电话费", "网络费", "维修费"]):
+    elif any(k in desc for k in ["姘寸數", "鐗╀笟", "鎴跨", "绉熻祦", "鍔炲叕鐢ㄥ搧", 
+                                 "鐢佃瘽璐?, "缃戠粶璐?, "缁翠慨璐?]):
         return {
-            "category": "管理费用-办公",
-            "pl_item": "管理费用",
-            "type": "支出",
-            "account": "管理费用-办公费"
+            "category": "绠＄悊璐圭敤-鍔炲叕",
+            "pl_item": "绠＄悊璐圭敤",
+            "type": "鏀嚭",
+            "account": "绠＄悊璐圭敤-鍔炲叕璐?
         }
     
-    elif any(k in desc for k in ["差旅", "交通", "餐饮", "招待", "会议费", 
-                                 "培训费", "咨询费", "审计费"]):
+    elif any(k in desc for k in ["宸梾", "浜ら€?, "椁愰ギ", "鎷涘緟", "浼氳璐?, 
+                                 "鍩硅璐?, "鍜ㄨ璐?, "瀹¤璐?]):
         return {
-            "category": "管理费用-其他",
-            "pl_item": "管理费用",
-            "type": "支出",
-            "account": "管理费用-业务招待费"
+            "category": "绠＄悊璐圭敤-鍏朵粬",
+            "pl_item": "绠＄悊璐圭敤",
+            "type": "鏀嚭",
+            "account": "绠＄悊璐圭敤-涓氬姟鎷涘緟璐?
         }
     
-    # 五、财务费用（利润表第6行）
-    elif any(k in desc for k in ["利息", "手续费", "银行手续费", "汇款手续费", 
-                                 "贷款利息", "存款利息"]):
+    # 浜斻€佽储鍔¤垂鐢紙鍒╂鼎琛ㄧ6琛岋級
+    elif any(k in desc for k in ["鍒╂伅", "鎵嬬画璐?, "閾惰鎵嬬画璐?, "姹囨鎵嬬画璐?, 
+                                 "璐锋鍒╂伅", "瀛樻鍒╂伅", "缁撴伅"]):
         return {
-            "category": "财务费用",
-            "pl_item": "财务费用",
-            "type": "支出",
-            "account": "财务费用-手续费"
+            "category": "璐㈠姟璐圭敤",
+            "pl_item": "璐㈠姟璐圭敤",
+            "type": "鏀嚭",
+            "account": "璐㈠姟璐圭敤-鎵嬬画璐?
         }
     
-    # 六、营业外收入（利润表第10行）
-    elif any(k in desc for k in ["政府补助", "补贴", "罚款收入", "违约金收入", 
-                                 "捐赠收入", "盘盈"]):
+    # 鍏€佽惀涓氬鏀跺叆锛堝埄娑﹁〃绗?0琛岋級
+    elif any(k in desc for k in ["鏀垮簻琛ュ姪", "琛ヨ创", "缃氭鏀跺叆", "杩濈害閲戞敹鍏?, 
+                                 "鎹愯禒鏀跺叆", "鐩樼泩"]):
         return {
-            "category": "营业外收入",
-            "pl_item": "营业外收入",
-            "type": "收入",
-            "account": "营业外收入"
+            "category": "钀ヤ笟澶栨敹鍏?,
+            "pl_item": "钀ヤ笟澶栨敹鍏?,
+            "type": "鏀跺叆",
+            "account": "钀ヤ笟澶栨敹鍏?
         }
     
-    # 七、营业外支出（利润表第11行）
-    elif any(k in desc for k in ["罚款", "捐赠", "损失", "盘亏", "自然灾害损失", 
-                                 "违约金支出"]):
+    # 涓冦€佽惀涓氬鏀嚭锛堝埄娑﹁〃绗?1琛岋級
+    elif any(k in desc for k in ["缃氭", "鎹愯禒", "鎹熷け", "鐩樹簭", "鑷劧鐏惧鎹熷け", 
+                                 "杩濈害閲戞敮鍑?]):
         return {
-            "category": "营业外支出",
-            "pl_item": "营业外支出",
-            "type": "支出",
-            "account": "营业外支出"
+            "category": "钀ヤ笟澶栨敮鍑?,
+            "pl_item": "钀ヤ笟澶栨敮鍑?,
+            "type": "鏀嚭",
+            "account": "钀ヤ笟澶栨敮鍑?
         }
     
-    # 八、投资收益（利润表第8行）
-    elif any(k in desc for k in ["分红", "投资收益", "股息", "理财收益", 
-                                 "投资收入"]):
+    # 鍏€佹姇璧勬敹鐩婏紙鍒╂鼎琛ㄧ8琛岋級
+    elif any(k in desc for k in ["鍒嗙孩", "鎶曡祫鏀剁泭", "鑲℃伅", "鐞嗚储鏀剁泭", 
+                                 "鎶曡祫鏀跺叆"]):
         return {
-            "category": "投资收益",
-            "pl_item": "投资收益",
-            "type": "收入",
-            "account": "投资收益"
+            "category": "鎶曡祫鏀剁泭",
+            "pl_item": "鎶曡祫鏀剁泭",
+            "type": "鏀跺叆",
+            "account": "鎶曡祫鏀剁泭"
         }
     
     else:
         return {
-            "category": "待分类",
-            "pl_item": "待分类",
-            "type": "未知",
-            "account": "待确认"
+            "category": "寰呭垎绫?,
+            "pl_item": "寰呭垎绫?,
+            "type": "鏈煡",
+            "account": "寰呯‘璁?
         }
 
 
 def generate_profit_statement(df_txns: object) -> dict:
     """
-    根据银行流水DataFrame，生成小企业会计准则利润表
-    df_txns 必须包含列：["摘要", "收入金额", "支出金额", "自动分类"]
+    鏍规嵁閾惰娴佹按DataFrame锛岀敓鎴愬皬浼佷笟浼氳鍑嗗垯鍒╂鼎琛?    df_txns 蹇呴』鍖呭惈鍒楋細["鎽樿", "鏀跺叆閲戦", "鏀嚭閲戦", "鑷姩鍒嗙被"]
     
-    返回利润表各项目金额（单位：元）
+    杩斿洖鍒╂鼎琛ㄥ悇椤圭洰閲戦锛堝崟浣嶏細鍏冿級
     """
-    # 营业收入（第1行）= 所有营业收入分类的收入金额之和
-    revenue = df_txns[df_txns["自动分类"] == "营业收入"]["收入金额"].sum()
+    # 钀ヤ笟鏀跺叆锛堢1琛岋級= 鎵€鏈夎惀涓氭敹鍏ュ垎绫荤殑鏀跺叆閲戦涔嬪拰
+    revenue = df_txns[df_txns["鑷姩鍒嗙被"] == "钀ヤ笟鏀跺叆"]["鏀跺叆閲戦"].sum()
     
-    # 营业成本（第2行）= 所有营业成本分类的支出金额之和
-    cost = df_txns[df_txns["自动分类"] == "营业成本"]["支出金额"].sum()
+    # 钀ヤ笟鎴愭湰锛堢2琛岋級= 鎵€鏈夎惀涓氭垚鏈垎绫荤殑鏀嚭閲戦涔嬪拰
+    cost = df_txns[df_txns["鑷姩鍒嗙被"] == "钀ヤ笟鎴愭湰"]["鏀嚭閲戦"].sum()
     
-    # 税金及附加（第3行）
-    tax_expense = df_txns[df_txns["自动分类"] == "税金及附加"]["支出金额"].sum()
+    # 绋庨噾鍙婇檮鍔狅紙绗?琛岋級
+    tax_expense = df_txns[df_txns["鑷姩鍒嗙被"] == "绋庨噾鍙婇檮鍔?]["鏀嚭閲戦"].sum()
     
-    # 管理费用（第5行）= 所有管理费用子分类的支出金额之和
-    manage_expense = df_txns[
-        df_txns["自动分类"].str.contains("管理费用", na=False)
-    ]["支出金额"].sum()
+    # 绠＄悊璐圭敤锛堢5琛岋級= 鎵€鏈夌鐞嗚垂鐢ㄥ瓙鍒嗙被鐨勬敮鍑洪噾棰濅箣鍜?    manage_expense = df_txns[
+        df_txns["鑷姩鍒嗙被"].str.contains("绠＄悊璐圭敤", na=False)
+    ]["鏀嚭閲戦"].sum()
     
-    # 财务费用（第6行）
-    finance_expense = df_txns[df_txns["自动分类"] == "财务费用"]["支出金额"].sum()
+    # 璐㈠姟璐圭敤锛堢6琛岋級
+    finance_expense = df_txns[df_txns["鑷姩鍒嗙被"] == "璐㈠姟璐圭敤"]["鏀嚭閲戦"].sum()
     
-    # 投资收益（第8行）
-    investment_income = df_txns[df_txns["自动分类"] == "投资收益"]["收入金额"].sum()
+    # 鎶曡祫鏀剁泭锛堢8琛岋級
+    investment_income = df_txns[df_txns["鑷姩鍒嗙被"] == "鎶曡祫鏀剁泭"]["鏀跺叆閲戦"].sum()
     
-    # 营业利润（第9行）= 营业收入 - 营业成本 - 税金及附加 - 管理费用 - 财务费用 + 投资收益
+    # 钀ヤ笟鍒╂鼎锛堢9琛岋級= 钀ヤ笟鏀跺叆 - 钀ヤ笟鎴愭湰 - 绋庨噾鍙婇檮鍔?- 绠＄悊璐圭敤 - 璐㈠姟璐圭敤 + 鎶曡祫鏀剁泭
     operating_profit = revenue - cost - tax_expense - manage_expense - finance_expense + investment_income
     
-    # 营业外收入（第10行）
-    other_income = df_txns[df_txns["自动分类"] == "营业外收入"]["收入金额"].sum()
+    # 钀ヤ笟澶栨敹鍏ワ紙绗?0琛岋級
+    other_income = df_txns[df_txns["鑷姩鍒嗙被"] == "钀ヤ笟澶栨敹鍏?]["鏀跺叆閲戦"].sum()
     
-    # 营业外支出（第11行）
-    other_expense = df_txns[df_txns["自动分类"] == "营业外支出"]["支出金额"].sum()
+    # 钀ヤ笟澶栨敮鍑猴紙绗?1琛岋級
+    other_expense = df_txns[df_txns["鑷姩鍒嗙被"] == "钀ヤ笟澶栨敮鍑?]["鏀嚭閲戦"].sum()
     
-    # 利润总额（第12行）= 营业利润 + 营业外收入 - 营业外支出
-    total_profit = operating_profit + other_income - other_expense
+    # 鍒╂鼎鎬婚锛堢12琛岋級= 钀ヤ笟鍒╂鼎 + 钀ヤ笟澶栨敹鍏?- 钀ヤ笟澶栨敮鍑?    total_profit = operating_profit + other_income - other_expense
     
-    # 所得税费用（第13行）= 利润总额 × 小型微利实际税率
+    # 鎵€寰楃◣璐圭敤锛堢13琛岋級= 鍒╂鼎鎬婚 脳 灏忓瀷寰埄瀹為檯绋庣巼
     if total_profit > 0:
         pol = load_tax_policies()
         eff_rate = pol["corporate_income_tax"]["small_low_profit_effective_rate"]
@@ -1187,70 +1141,64 @@ def generate_profit_statement(df_txns: object) -> dict:
     else:
         income_tax = 0.0
     
-    # 净利润（第14行）= 利润总额 - 所得税费用
+    # 鍑€鍒╂鼎锛堢14琛岋級= 鍒╂鼎鎬婚 - 鎵€寰楃◣璐圭敤
     net_profit = total_profit - income_tax
     
     return {
-        "营业收入": round(revenue, 2),
-        "营业成本": round(cost, 2),
-        "税金及附加": round(tax_expense, 2),
-        "管理费用": round(manage_expense, 2),
-        "财务费用": round(finance_expense, 2),
-        "投资收益": round(investment_income, 2),
-        "营业利润": round(operating_profit, 2),
-        "营业外收入": round(other_income, 2),
-        "营业外支出": round(other_expense, 2),
-        "利润总额": round(total_profit, 2),
-        "所得税费用": round(income_tax, 2),
-        "净利润": round(net_profit, 2),
+        "钀ヤ笟鏀跺叆": round(revenue, 2),
+        "钀ヤ笟鎴愭湰": round(cost, 2),
+        "绋庨噾鍙婇檮鍔?: round(tax_expense, 2),
+        "绠＄悊璐圭敤": round(manage_expense, 2),
+        "璐㈠姟璐圭敤": round(finance_expense, 2),
+        "鎶曡祫鏀剁泭": round(investment_income, 2),
+        "钀ヤ笟鍒╂鼎": round(operating_profit, 2),
+        "钀ヤ笟澶栨敹鍏?: round(other_income, 2),
+        "钀ヤ笟澶栨敮鍑?: round(other_expense, 2),
+        "鍒╂鼎鎬婚": round(total_profit, 2),
+        "鎵€寰楃◣璐圭敤": round(income_tax, 2),
+        "鍑€鍒╂鼎": round(net_profit, 2),
     }
 
 
 def validate_quarterly_declaration(profit_data: dict, revenue: float, cost: float, period_profit: float) -> list:
     """
-    校验利润表数据与企业所得税季度申报表数据是否一致
+    鏍￠獙鍒╂鼎琛ㄦ暟鎹笌浼佷笟鎵€寰楃◣瀛ｅ害鐢虫姤琛ㄦ暟鎹槸鍚︿竴鑷?    
+    鍙傛暟锛?      profit_data: generate_profit_statement() 鐨勮繑鍥炲€?      revenue: 鐢虫姤琛ㄧ1琛?钀ヤ笟鏀跺叆
+      cost: 鐢虫姤琛ㄧ2琛?钀ヤ笟鎴愭湰
+      period_profit: 鐢虫姤琛ㄧ3琛?鍒╂鼎鎬婚
     
-    参数：
-      profit_data: generate_profit_statement() 的返回值
-      revenue: 申报表第1行 营业收入
-      cost: 申报表第2行 营业成本
-      period_profit: 申报表第3行 利润总额
-    
-    返回：校验结果列表，每个元素为 (是否通过, 提示信息)
+    杩斿洖锛氭牎楠岀粨鏋滃垪琛紝姣忎釜鍏冪礌涓?(鏄惁閫氳繃, 鎻愮ず淇℃伅)
     """
     results = []
     
-    # 校验1：营业收入
-    if abs(profit_data["营业收入"] - revenue) > 1:
-        results.append((False, f"营业收入不一致：利润表{profit_data['营业收入']:.2f} vs 申报表{revenue:.2f}"))
+    # 鏍￠獙1锛氳惀涓氭敹鍏?    if abs(profit_data["钀ヤ笟鏀跺叆"] - revenue) > 1:
+        results.append((False, f"钀ヤ笟鏀跺叆涓嶄竴鑷达細鍒╂鼎琛▄profit_data['钀ヤ笟鏀跺叆']:.2f} vs 鐢虫姤琛▄revenue:.2f}"))
     else:
-        results.append((True, f"营业收入校验通过：{revenue:.2f} 元"))
+        results.append((True, f"钀ヤ笟鏀跺叆鏍￠獙閫氳繃锛歿revenue:.2f} 鍏?))
     
-    # 校验2：营业成本
-    if abs(profit_data["营业成本"] - cost) > 1:
-        results.append((False, f"营业成本不一致：利润表{profit_data['营业成本']:.2f} vs 申报表{cost:.2f}"))
+    # 鏍￠獙2锛氳惀涓氭垚鏈?    if abs(profit_data["钀ヤ笟鎴愭湰"] - cost) > 1:
+        results.append((False, f"钀ヤ笟鎴愭湰涓嶄竴鑷达細鍒╂鼎琛▄profit_data['钀ヤ笟鎴愭湰']:.2f} vs 鐢虫姤琛▄cost:.2f}"))
     else:
-        results.append((True, f"营业成本校验通过：{cost:.2f} 元"))
+        results.append((True, f"钀ヤ笟鎴愭湰鏍￠獙閫氳繃锛歿cost:.2f} 鍏?))
     
-    # 校验3：利润总额
-    if abs(profit_data["利润总额"] - period_profit) > 1:
-        results.append((False, f"利润总额不一致：利润表{profit_data['利润总额']:.2f} vs 申报表{period_profit:.2f}"))
+    # 鏍￠獙3锛氬埄娑︽€婚
+    if abs(profit_data["鍒╂鼎鎬婚"] - period_profit) > 1:
+        results.append((False, f"鍒╂鼎鎬婚涓嶄竴鑷达細鍒╂鼎琛▄profit_data['鍒╂鼎鎬婚']:.2f} vs 鐢虫姤琛▄period_profit:.2f}"))
     else:
-        results.append((True, f"利润总额校验通过：{period_profit:.2f} 元"))
+        results.append((True, f"鍒╂鼎鎬婚鏍￠獙閫氳繃锛歿period_profit:.2f} 鍏?))
     
     return results
 
 
 # ===============================================
-#  主程序（示例）
-# ===============================================
+#  涓荤▼搴忥紙绀轰緥锛?# ===============================================
 if __name__ == "__main__":
-    print("武汉金艳龙科技 - 个税社保计算工具 v1.0")
-    print("（无需安装任何依赖，直接运行）\n")
+    print("姝︽眽閲戣壋榫欑鎶€ - 涓◣绀句繚璁＄畻宸ュ叿 v1.0")
+    print("锛堟棤闇€瀹夎浠讳綍渚濊禆锛岀洿鎺ヨ繍琛岋級\n")
 
     employees = [
         {
-            "name": "员工A",
+            "name": "鍛樺伐A",
             "gross_salary": 10522,
             "si_base": 5000,
             "si_personal_actual": 522,
@@ -1259,9 +1207,9 @@ if __name__ == "__main__":
             "infant_care": 2000,
             "elderly_care": 1000,
         },
-        # 增加员工只需复制上方字典，修改姓名和工资金额
+        # 澧炲姞鍛樺伐鍙渶澶嶅埗涓婃柟瀛楀吀锛屼慨鏀瑰鍚嶅拰宸ヨ祫閲戦
         # {
-        #     "name": "员工B",
+        #     "name": "鍛樺伐B",
         #     "gross_salary": 8000,
         #     ...
         # },
@@ -1271,15 +1219,15 @@ if __name__ == "__main__":
     print_results(results)
     export_csv(results)
 
-    print("\n[提示] 使用提示：")
-    print("  1. 修改上方 employees 列表，增加/修改员工数据")
-    print("  2. 专项附加扣除如有变化，修改 special_deductions 字段")
-    print("  3. 运行：python tax_calculator.py")
-    print("  4. CSV底稿可直接导入Excel或发送给财务")
+    print("\n[鎻愮ず] 浣跨敤鎻愮ず锛?)
+    print("  1. 淇敼涓婃柟 employees 鍒楄〃锛屽鍔?淇敼鍛樺伐鏁版嵁")
+    print("  2. 涓撻」闄勫姞鎵ｉ櫎濡傛湁鍙樺寲锛屼慨鏀?special_deductions 瀛楁")
+    print("  3. 杩愯锛歱ython tax_calculator.py")
+    print("  4. CSV搴曠鍙洿鎺ュ鍏xcel鎴栧彂閫佺粰璐㈠姟")
 
 
 # ===============================================
-#  工资数据校验（银行流水 / 个税申报 / 年报三部分）
+#  宸ヨ祫鏁版嵁鏍￠獙锛堥摱琛屾祦姘?/ 涓◣鐢虫姤 / 骞存姤涓夐儴鍒嗭級
 # ===============================================
 
 def validate_salary_data(
@@ -1289,21 +1237,15 @@ def validate_salary_data(
     annual_total_salary: float = 0.0,
 ) -> dict:
     """
-    三重校验工资数据，返回校验结果字典。
+    涓夐噸鏍￠獙宸ヨ祫鏁版嵁锛岃繑鍥炴牎楠岀粨鏋滃瓧鍏搞€?
+    鍙傛暟锛?    - employees: 绯荤粺褰曞叆鐨勫憳宸ュ垪琛紙calc_one_employee 杈撳叆鏍煎紡锛?    - bank_df: 閾惰娴佹按 DataFrame锛岄渶鍚€屾憳瑕併€嶃€屾敮鍑洪噾棰濄€嶅垪
+    - tax_filing_df: 涓◣鐢虫姤璁板綍 DataFrame锛岄渶鍚€屽鍚嶃€嶃€岀疮璁℃敹鍏ャ€嶅垪
+    - annual_total_salary: 骞存姤涓殑銆屽叏骞村伐璧勬€婚銆嶏紙鐢ㄤ簬绗笁閲嶆牎楠岋級
 
-    参数：
-    - employees: 系统录入的员工列表（calc_one_employee 输入格式）
-    - bank_df: 银行流水 DataFrame，需含「摘要」「支出金额」列
-    - tax_filing_df: 个税申报记录 DataFrame，需含「姓名」「累计收入」列
-    - annual_total_salary: 年报中的「全年工资总额」（用于第三重校验）
-
-    返回：
-    {
-        "bank_match": [...],    # 银行流水 vs 系统工资
-        "tax_match": [...],    # 个税申报 vs 系统工资
-        "annual_match": {...},  # 年报工资总额 vs 系统年工资合计
-        "warnings": [...],     # 所有警告信息
-    }
+    杩斿洖锛?    {
+        "bank_match": [...],    # 閾惰娴佹按 vs 绯荤粺宸ヨ祫
+        "tax_match": [...],    # 涓◣鐢虫姤 vs 绯荤粺宸ヨ祫
+        "annual_match": {...},  # 骞存姤宸ヨ祫鎬婚 vs 绯荤粺骞村伐璧勫悎璁?        "warnings": [...],     # 鎵€鏈夎鍛婁俊鎭?    }
     """
     import pandas as pd
 
@@ -1314,56 +1256,53 @@ def validate_salary_data(
         "warnings": [],
     }
 
-    # ── 系统工资合计（年） ──
+    # 鈹€鈹€ 绯荤粺宸ヨ祫鍚堣锛堝勾锛?鈹€鈹€
     sys_annual_total = 0.0
     for emp in employees:
         m = emp.get("gross_salary", 0) or 0
         sys_annual_total += m * 12
 
     # ============================================================
-    #  校验1：银行流水 vs 系统工资
+    #  鏍￠獙1锛氶摱琛屾祦姘?vs 绯荤粺宸ヨ祫
     # ============================================================
     if bank_df is not None and len(bank_df) > 0:
         df = bank_df.copy()
 
-        # 兼容列名
+        # 鍏煎鍒楀悕
         col_map = {}
         for col in df.columns:
             cl = str(col).strip().lower()
-            if any(k in cl for k in ["摘要", "备注", "用途", "description"]):
-                col_map[col] = "摘要"
-            elif any(k in cl for k in ["支出", "借方", "取款", "debit", "转出"]):
-                col_map[col] = "支出金额"
-            elif any(k in cl for k in ["金额", "发生额", "transaction"]):
-                col_map[col] = "金额"
+            if any(k in cl for k in ["鎽樿", "澶囨敞", "鐢ㄩ€?, "description"]):
+                col_map[col] = "鎽樿"
+            elif any(k in cl for k in ["鏀嚭", "鍊熸柟", "鍙栨", "debit", "杞嚭"]):
+                col_map[col] = "鏀嚭閲戦"
+            elif any(k in cl for k in ["閲戦", "鍙戠敓棰?, "transaction"]):
+                col_map[col] = "閲戦"
         df = df.rename(columns=col_map)
 
-        # 用 classify_bank_transaction 识别工资类支出
-        def is_salary_row(desc):
+        # 鐢?classify_bank_transaction 璇嗗埆宸ヨ祫绫绘敮鍑?        def is_salary_row(desc):
             category = classify_bank_transaction(str(desc))["category"]
-            return category in ("管理费用-人工",)
+            return category in ("绠＄悊璐圭敤-浜哄伐",)
 
-        # 工资关键词二次兜底
-        salary_keywords = ["工资", "薪资", "绩效", "奖金", "薪酬", "薪水", " salary", "salary", "payroll"]
+        # 宸ヨ祫鍏抽敭璇嶄簩娆″厹搴?        salary_keywords = ["宸ヨ祫", "钖祫", "缁╂晥", "濂栭噾", "钖叕", "钖按", " salary", "salary", "payroll"]
 
         def is_salary_desc(desc):
             d = str(desc).lower()
             return any(k in d for k in salary_keywords)
 
-        # 提取支出金额列
-        amount_col = None
-        for c in ["支出金额", "金额"]:
+        # 鎻愬彇鏀嚭閲戦鍒?        amount_col = None
+        for c in ["鏀嚭閲戦", "閲戦"]:
             if c in df.columns:
                 amount_col = c
                 break
         if amount_col is None:
             for c in df.columns:
-                if any(k in str(c).lower() for k in ["支出", "借方", "amount", "金额"]):
+                if any(k in str(c).lower() for k in ["鏀嚭", "鍊熸柟", "amount", "閲戦"]):
                     amount_col = c
                     break
 
         if amount_col:
-            df["_is_salary"] = df["摘要"].apply(lambda x: is_salary_row(x) or is_salary_desc(x))
+            df["_is_salary"] = df["鎽樿"].apply(lambda x: is_salary_row(x) or is_salary_desc(x))
             salary_txns = df[df["_is_salary"] == True].copy()
 
             if len(salary_txns) > 0:
@@ -1376,47 +1315,45 @@ def validate_salary_data(
                     "sys_annual_total": round(sys_annual_total, 2),
                     "diff": round(diff, 2),
                     "diff_pct": round(pct, 2),
-                    "match": abs(diff) < max(bank_salary_total * 0.05, 500),  # 5% 或 500 元以内认为一致
-                    "txn_count": len(salary_txns),
+                    "match": abs(diff) < max(bank_salary_total * 0.05, 500),  # 5% 鎴?500 鍏冧互鍐呰涓轰竴鑷?                    "txn_count": len(salary_txns),
                 }
 
                 if not result["bank_match"]["match"]:
                     result["warnings"].append(
-                        f"⚠️ 银行流水工资支出 {bank_salary_total:,.0f} 元 "
-                        f"与系统年工资 {sys_annual_total:,.0f} 元不一致（差 {diff:+,.0f} 元，{pct:+.1f}%）"
+                        f"鈿狅笍 閾惰娴佹按宸ヨ祫鏀嚭 {bank_salary_total:,.0f} 鍏?"
+                        f"涓庣郴缁熷勾宸ヨ祫 {sys_annual_total:,.0f} 鍏冧笉涓€鑷达紙宸?{diff:+,.0f} 鍏冿紝{pct:+.1f}%锛?
                     )
                 else:
                     result["warnings"].append(
-                        f"✅ 银行流水工资支出与系统工资一致（差 {diff:+,.0f} 元）"
+                        f"鉁?閾惰娴佹按宸ヨ祫鏀嚭涓庣郴缁熷伐璧勪竴鑷达紙宸?{diff:+,.0f} 鍏冿級"
                     )
             else:
-                result["warnings"].append("⚠️ 银行流水中未识别到工资/奖金类支出，请检查摘要关键词")
+                result["warnings"].append("鈿狅笍 閾惰娴佹按涓湭璇嗗埆鍒板伐璧?濂栭噾绫绘敮鍑猴紝璇锋鏌ユ憳瑕佸叧閿瘝")
         else:
-            result["warnings"].append("⚠️ 银行流水文件中未找到支出金额列，无法校验工资")
+            result["warnings"].append("鈿狅笍 閾惰娴佹按鏂囦欢涓湭鎵惧埌鏀嚭閲戦鍒楋紝鏃犳硶鏍￠獙宸ヨ祫")
 
     # ============================================================
-    #  校验2：个税申报记录 vs 系统工资
+    #  鏍￠獙2锛氫釜绋庣敵鎶ヨ褰?vs 绯荤粺宸ヨ祫
     # ============================================================
     if tax_filing_df is not None and len(tax_filing_df) > 0:
         df_tax = tax_filing_df.copy()
 
-        # 兼容列名
+        # 鍏煎鍒楀悕
         col_map2 = {}
         for col in df_tax.columns:
             cl = str(col).strip().lower()
-            if "姓名" in col or "name" in cl:
-                col_map2[col] = "姓名"
-            if any(k in cl for k in ["累计收入", "收入额", "工资薪金", "应纳税所得额", "收入"]):
-                col_map2[col] = "累计收入"
+            if "濮撳悕" in col or "name" in cl:
+                col_map2[col] = "濮撳悕"
+            if any(k in cl for k in ["绱鏀跺叆", "鏀跺叆棰?, "宸ヨ祫钖噾", "搴旂撼绋庢墍寰楅", "鏀跺叆"]):
+                col_map2[col] = "绱鏀跺叆"
         df_tax = df_tax.rename(columns=col_map2)
 
-        if "姓名" in df_tax.columns and "累计收入" in df_tax.columns:
-            # 按员工匹配
-            emp_map = {e.get("name", ""): e for e in employees}
+        if "濮撳悕" in df_tax.columns and "绱鏀跺叆" in df_tax.columns:
+            # 鎸夊憳宸ュ尮閰?            emp_map = {e.get("name", ""): e for e in employees}
             for _, row in df_tax.iterrows():
-                name = str(row.get("姓名", "")).strip()
+                name = str(row.get("濮撳悕", "")).strip()
                 try:
-                    tax_income = float(row.get("累计收入", 0) or 0)
+                    tax_income = float(row.get("绱鏀跺叆", 0) or 0)
                 except (ValueError, TypeError):
                     continue
                 if name in emp_map:
@@ -1427,22 +1364,20 @@ def validate_salary_data(
                         "sys_annual": round(sys_annual, 2),
                         "tax_filing_income": round(tax_income, 2),
                         "diff": round(diff, 2),
-                        "match": abs(diff) < max(sys_annual * 0.01, 100),  # 1% 或 100 元以内
-                    })
+                        "match": abs(diff) < max(sys_annual * 0.01, 100),  # 1% 鎴?100 鍏冧互鍐?                    })
                     if abs(diff) >= max(sys_annual * 0.01, 100):
                         result["warnings"].append(
-                            f"⚠️ 员工「{name}」个税申报累计收入 {tax_income:,.0f} 元 "
-                            f"与系统年工资 {sys_annual:,.0f} 元差 {diff:+,.0f} 元"
+                            f"鈿狅笍 鍛樺伐銆寋name}銆嶄釜绋庣敵鎶ョ疮璁℃敹鍏?{tax_income:,.0f} 鍏?"
+                            f"涓庣郴缁熷勾宸ヨ祫 {sys_annual:,.0f} 鍏冨樊 {diff:+,.0f} 鍏?
                         )
 
             if len(result["tax_match"]) == 0:
-                result["warnings"].append("⚠️ 个税申报记录中未找到匹配的员工姓名")
+                result["warnings"].append("鈿狅笍 涓◣鐢虫姤璁板綍涓湭鎵惧埌鍖归厤鐨勫憳宸ュ鍚?)
         else:
-            result["warnings"].append("⚠️ 个税申报文件中未找到「姓名」和「累计收入」列")
+            result["warnings"].append("鈿狅笍 涓◣鐢虫姤鏂囦欢涓湭鎵惧埌銆屽鍚嶃€嶅拰銆岀疮璁℃敹鍏ャ€嶅垪")
 
     # ============================================================
-    #  校验3：年报工资总额 vs 系统年工资合计
-    # ============================================================
+    #  鏍￠獙3锛氬勾鎶ュ伐璧勬€婚 vs 绯荤粺骞村伐璧勫悎璁?    # ============================================================
     if annual_total_salary and annual_total_salary > 0:
         diff = sys_annual_total - annual_total_salary
         pct = (diff / annual_total_salary * 100) if annual_total_salary > 0 else 0
@@ -1451,16 +1386,15 @@ def validate_salary_data(
             "sys_annual_total": round(sys_annual_total, 2),
             "diff": round(diff, 2),
             "diff_pct": round(pct, 2),
-            "match": abs(diff) < max(annual_total_salary * 0.03, 1000),  # 3% 或 1000 元以内
-        }
+            "match": abs(diff) < max(annual_total_salary * 0.03, 1000),  # 3% 鎴?1000 鍏冧互鍐?        }
         if not result["annual_match"]["match"]:
             result["warnings"].append(
-                f"⚠️ 年报工资总额 {annual_total_salary:,.0f} 元 "
-                f"与系统年工资合计 {sys_annual_total:,.0f} 元不一致（差 {diff:+,.0f} 元，{pct:+.1f}%）"
+                f"鈿狅笍 骞存姤宸ヨ祫鎬婚 {annual_total_salary:,.0f} 鍏?"
+                f"涓庣郴缁熷勾宸ヨ祫鍚堣 {sys_annual_total:,.0f} 鍏冧笉涓€鑷达紙宸?{diff:+,.0f} 鍏冿紝{pct:+.1f}%锛?
             )
         else:
             result["warnings"].append(
-                f"✅ 年报工资总额与系统工资一致（差 {diff:+,.0f} 元）"
+                f"鉁?骞存姤宸ヨ祫鎬婚涓庣郴缁熷伐璧勪竴鑷达紙宸?{diff:+,.0f} 鍏冿級"
             )
 
     return result
