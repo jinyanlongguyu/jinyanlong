@@ -1028,10 +1028,42 @@ def format_corporate_tax_report(result: dict, quarter: int, year: int, vat_data:
 
 def classify_bank_transaction(desc: str) -> dict:
     """
-    根据银行流水摘要，自动分类到小企业会计准则利润表项目
-    返回：{"category": "营业收入", "pl_item": "营业收入", "影响利润": "收入"}
+    根据银行流水摘要，自动分类到小企业会计准则利润表或资产负债表项目
+    返回：{"category": "营业收入", "pl_item": "营业收入", "type": "收入", "account": "主营业务收入"}
     """
     desc = str(desc).lower()
+    
+    # ═════════════════════════════════════════════
+    #  资产负债表项目（不进入利润表）
+    # ═════════════════════════════════════════════
+    
+    # 其他应付款 — 股东借款 / 股东垫款（负债）
+    shareholder_loan_kw = ["股东借款", "股东垫款", "股东暂借", "股东往来款",
+                           "老板借款", "老板垫款", "老板暂借", "老板往来",
+                           "法人借款", "法人垫款", "法人往来", "法人暂借",
+                           "还款给股东", "还股东款", "归还股东", "还老板款",
+                           "股东转入", "老板转入", "法人转入"]
+    if any(k in desc for k in shareholder_loan_kw):
+        return {
+            "category": "其他应付款-股东借款",
+            "pl_item": "资产负债表-其他应付款",
+            "type": "负债",
+            "account": "其他应付款-股东借款"
+        }
+    
+    # 实收资本 — 股东注资（所有者权益）
+    if any(k in desc for k in ["注册资本", "实收资本", "增资款", "投资款注入",
+                                "股东出资", "股本注入"]):
+        return {
+            "category": "实收资本",
+            "pl_item": "资产负债表-实收资本",
+            "type": "所有者权益",
+            "account": "实收资本"
+        }
+    
+    # ═════════════════════════════════════════════
+    #  利润表项目
+    # ═════════════════════════════════════════════
     
     # 一、营业收入（利润表第1行）
     if any(k in desc for k in ["货款", "销售收入", "服务费", "咨询费", "收款", 
@@ -1123,7 +1155,9 @@ def classify_bank_transaction(desc: str) -> dict:
     
     # 八、营业外收入（利润表第22行）
     elif any(k in desc for k in ["政府补助", "补贴", "罚款收入", "违约金收入", 
-                                 "捐赠收入", "盘盈"]):
+                                 "捐赠收入", "盘盈",
+                                 "实名认证", "认证打款", "账户验证", "打款验证",
+                                 "验证款", "认证验证"]):
         return {
             "category": "营业外收入",
             "pl_item": "营业外收入",
@@ -1213,6 +1247,21 @@ def generate_profit_statement(df_txns: object) -> dict:
     # 第32行：净利润 = 30 - 31
     net_profit = round(total_profit - income_tax, 2)
     
+    # ═══ 资产负债表项目（不影响利润）═══
+    # 其他应付款-股东借款：收入=借款增加，支出=还款减少
+    s_loan_in = df_txns[df_txns["自动分类"] == "其他应付款-股东借款"]["收入金额"].sum()
+    s_loan_out = df_txns[df_txns["自动分类"] == "其他应付款-股东借款"]["支出金额"].sum()
+    s_loan_net = round(s_loan_in - s_loan_out, 2)  # 净借款增加
+    
+    # 实收资本
+    capital_in = df_txns[df_txns["自动分类"] == "实收资本"]["收入金额"].sum()
+    capital_out = df_txns[df_txns["自动分类"] == "实收资本"]["支出金额"].sum()
+    capital_net = round(capital_in - capital_out, 2)
+    
+    # 待分类
+    unclassified_in = df_txns[df_txns["自动分类"] == "待分类"]["收入金额"].sum()
+    unclassified_out = df_txns[df_txns["自动分类"] == "待分类"]["支出金额"].sum()
+    
     return {
         "营业收入": round(revenue, 2),
         "营业成本": round(cost, 2),
@@ -1227,6 +1276,15 @@ def generate_profit_statement(df_txns: object) -> dict:
         "利润总额": total_profit,
         "所得税费用": income_tax,
         "净利润": net_profit,
+        # 资产负债表项目
+        "其他应付款_股东借款_收入": round(s_loan_in, 2),
+        "其他应付款_股东借款_支出": round(s_loan_out, 2),
+        "其他应付款_股东借款_净额": s_loan_net,
+        "实收资本_收入": round(capital_in, 2),
+        "实收资本_支出": round(capital_out, 2),
+        "实收资本_净额": capital_net,
+        "待分类_收入": round(unclassified_in, 2),
+        "待分类_支出": round(unclassified_out, 2),
     }
 
 
