@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-閲戣壋榫橝I绋庡姟鍔╂墜 - 鍛戒护琛岀増锛堟敮鎸佺湡瀹?DeepSeek AI锛?杩愯锛歱ython tax_ai_explainer.py
+金艳龙AI税务助手 - 命令行版（支持真实 DeepSeek AI）
+运行：python tax_ai_explainer.py
 
-閰嶇疆 API Key锛堜换閫変竴绉嶏級锛?  鏂瑰紡1锛氬湪椤圭洰鏍圭洰褰曞垱寤?.env 鏂囦欢锛屽啓鍏?DEEPSEEK_API_KEY=sk-xxx
-  鏂瑰紡2锛氳缃幆澧冨彉閲?DEEPSEEK_API_KEY
+配置 API Key（任选一种）：
+  方式1：在项目根目录创建 .env 文件，写入 DEEPSEEK_API_KEY=sk-xxx
+  方式2：设置环境变量 DEEPSEEK_API_KEY
 """
 
 import os
@@ -12,51 +14,51 @@ import requests
 from datetime import datetime
 from dotenv import load_dotenv
 
-# 璇诲彇 .env 鏂囦欢
+# 读取 .env 文件
 load_dotenv()
 
 # ===============================================
-#  DeepSeek AI 閰嶇疆
+#  DeepSeek AI 配置
 # ===============================================
 
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions"
 DEEPSEEK_MODEL = "deepseek-chat"
 
-# 鏄惁浣跨敤鐪熷疄 AI
+# 是否使用真实 AI
 USE_REAL_AI = bool(DEEPSEEK_API_KEY)
 
 if USE_REAL_AI:
-    print("[OK] 妫€娴嬪埌 DeepSeek API Key锛屽皢浣跨敤鐪熷疄 AI 鐢熸垚鐢虫姤璇存槑")
+    print("[OK] 检测到 DeepSeek API Key，将使用真实 AI 生成申报说明")
 else:
-    print("[鎻愮ず] 鏈娴嬪埌 API Key锛屼娇鐢ㄦā鎷熸ā寮忥紙瑙勫垯鐢熸垚锛?)
-    print("       濡傞渶浣跨敤鐪熷疄 AI锛岃鍦?.env 鏂囦欢涓厤缃?DEEPSEEK_API_KEY")
+    print("[提示] 未检测到 API Key，使用模拟模式（规则生成）")
+    print("       如需使用真实 AI，请在 .env 文件中配置 DEEPSEEK_API_KEY")
 
 
 # ===============================================
-#  绀句繚涓庝釜绋庤绠楀嚱鏁帮紙涓?tax_calculator.py 淇濇寔涓€鑷达級
+#  社保与个税计算函数（与 tax_calculator.py 保持一致）
 # ===============================================
 
-# 姝︽眽 2026 绀句繚姣斾緥锛堜釜浜猴級
+# 武汉 2026 社保比例（个人）
 SOCIAL_INSURANCE_RATE_PERSONAL = {
-    "鍏昏€?: 0.08,
-    "鍖荤枟": 0.02,
-    "澶变笟": 0.003,
+    "养老": 0.08,
+    "医疗": 0.02,
+    "失业": 0.003,
 }
 SOCIAL_INSURANCE_PERSONAL_FIXED = {
-    "鍖荤枟澶х梾": 7,   # 澶ч鍖荤枟淇濋櫓鍥哄畾 7 鍏冿紙閯備汉绀惧彂銆?023銆曪級
+    "医疗大病": 7,   # 大额医疗保险固定 7 元（鄂人社发〔2023〕）
 }
 
-# 鍏徃鎵挎媴閮ㄥ垎
+# 公司承担部分
 SOCIAL_INSURANCE_RATE_COMPANY = {
-    "鍏昏€?: 0.16,
-    "鍖荤枟": 0.087,
-    "澶变笟": 0.007,
-    "宸ヤ激": 0.002,
+    "养老": 0.16,
+    "医疗": 0.087,
+    "失业": 0.007,
+    "工伤": 0.002,
 }
 
 def calc_social_insurance_personal(base):
-    """璁＄畻涓汉绀句繚缂寸撼閲戦"""
+    """计算个人社保缴纳金额"""
     total = 0
     detail = {}
     for k, v in SOCIAL_INSURANCE_RATE_PERSONAL.items():
@@ -69,7 +71,7 @@ def calc_social_insurance_personal(base):
     return round(total, 2), detail
 
 def calc_social_insurance_company(base):
-    """璁＄畻鍏徃鎵挎媴绀句繚閲戦"""
+    """计算公司承担社保金额"""
     total = 0
     detail = {}
     for k, v in SOCIAL_INSURANCE_RATE_COMPANY.items():
@@ -79,7 +81,7 @@ def calc_social_insurance_company(base):
     return round(total, 2), detail
 
 def calc_income_tax(taxable_income):
-    """璁＄畻涓◣锛堢疮璁￠鎵ｆ硶锛屾澶勭畝鍖栦负鏈堝害璁＄畻锛?""
+    """计算个税（累计预扣法，此处简化为月度计算）"""
     if taxable_income <= 0:
         return 0, 0.0
     brackets = [
@@ -98,13 +100,15 @@ def calc_income_tax(taxable_income):
             tax = remaining * rate - deduction
             break
         remaining = threshold
-    # 娉ㄦ剰锛氫互涓婁负骞村害绱閫昏緫绠€鍖栵紝瀹為檯鏈堝害鐢虫姤鐢ㄧ疮璁￠鎵ｆ硶
-    # 姝ゅ鍋氱畝鍖栨紨绀猴紝寤鸿瀵规帴涓撲笟绋庡姟璁＄畻搴?    return max(0, round(tax, 2)), 0.0
+    # 注意：以上为年度累计逻辑简化，实际月度申报用累计预扣法
+    # 此处做简化演示，建议对接专业税务计算库
+    return max(0, round(tax, 2)), 0.0
 
 def calc_one_employee(name, gross_salary, si_base, si_personal_actual,
                      special_deduction, child_edu=0, infant_care=0, elderly_care=0):
-    """璁＄畻鍗曞悕鍛樺伐绋庡姟璇︽儏"""
-    # 濡傛灉鐢ㄥ疄闄呯即绾抽噾棰濓紝浠ュ疄闄呬负鍑嗭紱鍚﹀垯鎸夊熀鏁拌绠?    if si_personal_actual > 0:
+    """计算单名员工税务详情"""
+    # 如果用实际缴纳金额，以实际为准；否则按基数计算
+    if si_personal_actual > 0:
         si_personal = si_personal_actual
     else:
         si_personal, _ = calc_social_insurance_personal(si_base)
@@ -118,52 +122,62 @@ def calc_one_employee(name, gross_salary, si_base, si_personal_actual,
     total_labor_cost = gross_salary + company_si
 
     return {
-        "濮撳悕": name,
-        "绋庡墠宸ヨ祫": gross_salary,
-        "涓汉绀句繚": si_personal,
-        "涓撻」闄勫姞鎵ｉ櫎": special_deduction,
-        "瀛愬コ鏁欒偛": child_edu,
-        "濠村辜鍎跨収鎶?: infant_care,
-        "璧″吇鑰佷汉": elderly_care,
-        "搴旂◣鏀跺叆": max(0, round(taxable, 2)),
-        "搴旂撼绋庨": tax,
-        "瀹炲彂宸ヨ祫": round(net_salary, 2),
-        "鍏徃绀句繚鎵挎媴": company_si,
-        "鍏徃鐢ㄤ汉鎬绘垚鏈?: round(total_labor_cost, 2),
-        "鍏徃绀句繚鏄庣粏": company_si_detail,
+        "姓名": name,
+        "税前工资": gross_salary,
+        "个人社保": si_personal,
+        "专项附加扣除": special_deduction,
+        "子女教育": child_edu,
+        "婴幼儿照护": infant_care,
+        "赡养老人": elderly_care,
+        "应税收入": max(0, round(taxable, 2)),
+        "应纳税额": tax,
+        "实发工资": round(net_salary, 2),
+        "公司社保承担": company_si,
+        "公司用人总成本": round(total_labor_cost, 2),
+        "公司社保明细": company_si_detail,
     }
 
 
 # ===============================================
-#  AI 鐢虫姤璇存槑鐢熸垚
+#  AI 申报说明生成
 # ===============================================
 
 def generate_ai_explanation(results, year, month):
-    """璋冪敤 DeepSeek API 鐢熸垚涓撲笟鐢虫姤璇存槑"""
+    """调用 DeepSeek API 生成专业申报说明"""
 
-    # 鏋勯€犳彁绀鸿瘝
+    # 构造提示词
     rows_text = ""
     for r in results:
         rows_text += (
-            f"鍛樺伐 {r['濮撳悕']}锛氱◣鍓嶅伐璧?{r['绋庡墠宸ヨ祫']} 鍏冿紝"
-            f"涓汉绀句繚 {r['涓汉绀句繚']} 鍏冿紝"
-            f"涓撻」闄勫姞鎵ｉ櫎 {r['涓撻」闄勫姞鎵ｉ櫎']} 鍏?
-            f"锛堝瓙濂虫暀鑲?{r['瀛愬コ鏁欒偛']} 鍏冿紝濠村辜鍎跨収鎶?{r['濠村辜鍎跨収鎶?]} 鍏冿紝璧″吇鑰佷汉 {r['璧″吇鑰佷汉']} 鍏冿級锛?
-            f"搴旂◣鏀跺叆 {r['搴旂◣鏀跺叆']} 鍏冿紝搴旂撼绋庨 {r['搴旂撼绋庨']} 鍏冿紝"
-            f"瀹炲彂宸ヨ祫 {r['瀹炲彂宸ヨ祫']} 鍏冦€俓n"
+            f"员工 {r['姓名']}：税前工资 {r['税前工资']} 元，"
+            f"个人社保 {r['个人社保']} 元，"
+            f"专项附加扣除 {r['专项附加扣除']} 元"
+            f"（子女教育 {r['子女教育']} 元，婴幼儿照护 {r['婴幼儿照护']} 元，赡养老人 {r['赡养老人']} 元），"
+            f"应税收入 {r['应税收入']} 元，应纳税额 {r['应纳税额']} 元，"
+            f"实发工资 {r['实发工资']} 元。\n"
         )
 
-    company_si_total = sum(r["鍏徃绀句繚鎵挎媴"] for r in results)
-    total_labor_cost = sum(r["鍏徃鐢ㄤ汉鎬绘垚鏈?] for r in results)
-    total_tax = sum(r["搴旂撼绋庨"] for r in results)
+    company_si_total = sum(r["公司社保承担"] for r in results)
+    total_labor_cost = sum(r["公司用人总成本"] for r in results)
+    total_tax = sum(r["应纳税额"] for r in results)
 
-    prompt = f"""浣犳槸涓€浣嶄笓涓氱殑绋庡姟椤鹃棶锛岃涓轰互涓嬩紒涓歿year}骞磠month}鏈堢殑涓◣鍙婄ぞ淇濈敵鎶ユ挵鍐欎竴浠戒笓涓氱殑鐢虫姤璇存槑銆?
-## 鍛樺伐鏁版嵁
+    prompt = f"""你是一位专业的税务顾问，请为以下企业{year}年{month}月的个税及社保申报撰写一份专业的申报说明。
+
+## 员工数据
 {rows_text}
-## 姹囨€绘暟鎹?- 鍏徃鎵挎媴绀句繚鎬婚锛歿company_si_total} 鍏?- 鍏ㄤ綋鍛樺伐搴旂撼绋庨鍚堣锛歿total_tax} 鍏?- 鍏徃鐢ㄤ汉鎬绘垚鏈細{total_labor_cost} 鍏?
-## 瑕佹眰
-1. 浠?姝︽眽閲戣壋榫欑鎶€鏈夐檺鍏徃 {year}骞磠month}鏈?绋庡姟鐢虫姤璇存槑"涓烘爣棰?2. 鍒嗗洓涓儴鍒嗭細涓€銆佺敵鎶ユ鍐碉紱浜屻€佸憳宸ヤ釜绋庢槑缁嗭紱涓夈€佺ぞ淇濈即绾宠鏄庯紱鍥涖€佺敵鎶ユ敞鎰忎簨椤?3. 璇皵涓撲笟銆佺畝娲侊紝閫傚悎璐㈠姟鎻愪氦缁欑◣鍔″眬鎴栫暀瀛樺妗?4. 鎻愰啋鐢ㄦ埛鏍稿涓撻」闄勫姞鎵ｉ櫎淇℃伅鏄惁宸插強鏃舵洿鏂帮紙涓◣APP锛?5. 璇存槑绀句繚鍩烘暟濡傛湁璋冩暣璇蜂互绀句繚灞€鏍稿畾涓哄噯
-6. 鎬诲瓧鏁版帶鍒跺湪 500-800 瀛?7. 鐢ㄤ腑鏂囪緭鍑猴紝涓嶈杈撳嚭鑻辨枃
+## 汇总数据
+- 公司承担社保总额：{company_si_total} 元
+- 全体员工应纳税额合计：{total_tax} 元
+- 公司用人总成本：{total_labor_cost} 元
+
+## 要求
+1. 以"武汉金艳龙科技有限公司 {year}年{month}月 税务申报说明"为标题
+2. 分四个部分：一、申报概况；二、员工个税明细；三、社保缴纳说明；四、申报注意事项
+3. 语气专业、简洁，适合财务提交给税务局或留存备案
+4. 提醒用户核对专项附加扣除信息是否已及时更新（个税APP）
+5. 说明社保基数如有调整请以社保局核定为准
+6. 总字数控制在 500-800 字
+7. 用中文输出，不要输出英文
 """
 
     headers = {
@@ -173,7 +187,7 @@ def generate_ai_explanation(results, year, month):
     data = {
         "model": DEEPSEEK_MODEL,
         "messages": [
-            {"role": "system", "content": "浣犳槸涓€浣嶄笓涓氱殑绋庡姟椤鹃棶锛屾搮闀挎挵鍐欎紒涓氱◣鍔＄敵鎶ヨ鏄庛€?},
+            {"role": "system", "content": "你是一位专业的税务顾问，擅长撰写企业税务申报说明。"},
             {"role": "user", "content": prompt}
         ],
         "max_tokens": 1500,
@@ -186,71 +200,73 @@ def generate_ai_explanation(results, year, month):
             result = resp.json()
             return result["choices"][0]["message"]["content"]
         else:
-            print(f"[AI璋冪敤澶辫触 {resp.status_code}]锛屽垏鎹㈡ā鎷熸ā寮?)
+            print(f"[AI调用失败 {resp.status_code}]，切换模拟模式")
             return generate_mock_explanation(results, year, month)
     except Exception as e:
-        print(f"[AI璋冪敤寮傚父: {e}]锛屽垏鎹㈡ā鎷熸ā寮?)
+        print(f"[AI调用异常: {e}]，切换模拟模式")
         return generate_mock_explanation(results, year, month)
 
 
 def generate_mock_explanation(results, year, month):
-    """妯℃嫙 AI 鐢熸垚鐢虫姤璇存槑锛堟棤 API Key 鏃剁殑闄嶇骇鏂规锛?""
+    """模拟 AI 生成申报说明（无 API Key 时的降级方案）"""
     lines = []
-    lines.append(f"姝︽眽閲戣壋榫欑鎶€鏈夐檺鍏徃 {year}骞磠month}鏈?绋庡姟鐢虫姤璇存槑\n")
+    lines.append(f"武汉金艳龙科技有限公司 {year}年{month}月 税务申报说明\n")
     lines.append("=" * 50)
-    lines.append("\n涓€銆佺敵鎶ユ鍐礬n")
-    lines.append(f"  鏈湀鐢虫姤鍛樺伐浜烘暟锛歿len(results)} 浜?)
-    total_tax = sum(r["搴旂撼绋庨"] for r in results)
-    company_si = sum(r["鍏徃绀句繚鎵挎媴"] for r in results)
-    lines.append(f"  搴旂撼绋庨鍚堣锛歿total_tax} 鍏?)
-    lines.append(f"  鍏徃鎵挎媴绀句繚鍚堣锛歿company_si} 鍏?)
-    lines.append("\n浜屻€佸憳宸ヤ釜绋庢槑缁哱n")
+    lines.append("\n一、申报概况\n")
+    lines.append(f"  本月申报员工人数：{len(results)} 人")
+    total_tax = sum(r["应纳税额"] for r in results)
+    company_si = sum(r["公司社保承担"] for r in results)
+    lines.append(f"  应纳税额合计：{total_tax} 元")
+    lines.append(f"  公司承担社保合计：{company_si} 元")
+    lines.append("\n二、员工个税明细\n")
     for r in results:
-        lines.append(f"  {r['濮撳悕']}锛氬簲绋庢敹鍏?{r['搴旂◣鏀跺叆']} 鍏冿紝搴旂撼绋庨 {r['搴旂撼绋庨']} 鍏冿紝瀹炲彂 {r['瀹炲彂宸ヨ祫']} 鍏?)
-    lines.append("\n涓夈€佺ぞ淇濈即绾宠鏄嶾n")
-    lines.append(f"  绀句繚缂磋垂鍩烘暟锛歿results[0]['涓汉绀句繚']} 鍏冿紙浠ュ疄闄呯敵鎶ヤ负鍑嗭級")
-    lines.append(f"  鍏徃鎵挎媴閮ㄥ垎鍚堣锛歿company_si} 鍏?)
-    lines.append("\n鍥涖€佺敵鎶ユ敞鎰忎簨椤筡n")
-    lines.append("  1. 璇锋牳瀵逛笓椤归檮鍔犳墸闄や俊鎭槸鍚﹀凡鍙婃椂鏇存柊锛堜釜绋嶢PP锛?)
-    lines.append("  2. 绀句繚鍩烘暟濡傛湁璋冩暣璇蜂互绀句繚灞€鏍稿畾涓哄噯")
-    lines.append("  3. 鏈簳绋跨敱 AI 杈呭姪鐢熸垚锛屾彁浜ゅ墠璇蜂汉宸ュ鏍?)
+        lines.append(f"  {r['姓名']}：应税收入 {r['应税收入']} 元，应纳税额 {r['应纳税额']} 元，实发 {r['实发工资']} 元")
+    lines.append("\n三、社保缴纳说明\n")
+    lines.append(f"  社保缴费基数：{results[0]['个人社保']} 元（以实际申报为准）")
+    lines.append(f"  公司承担部分合计：{company_si} 元")
+    lines.append("\n四、申报注意事项\n")
+    lines.append("  1. 请核对专项附加扣除信息是否已及时更新（个税APP）")
+    lines.append("  2. 社保基数如有调整请以社保局核定为准")
+    lines.append("  3. 本底稿由 AI 辅助生成，提交前请人工复核")
     lines.append("\n" + "=" * 50 + "\n")
     return "\n".join(lines)
 
 
 def save_results(results, explanation, year, month):
-    """淇濆瓨璁＄畻缁撴灉鍜岀敵鎶ヨ鏄?""
-    # 淇濆瓨 CSV 搴曠
+    """保存计算结果和申报说明"""
+    # 保存 CSV 底稿
     import csv
-    csv_path = f"鐢虫姤搴曠_{year}{month:02d}.csv"
+    csv_path = f"申报底稿_{year}{month:02d}.csv"
     with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=results[0].keys())
         writer.writeheader()
         writer.writerows(results)
-    print(f"[OK] CSV搴曠宸茬敓鎴愶細{csv_path}")
+    print(f"[OK] CSV底稿已生成：{csv_path}")
 
-    # 淇濆瓨鐢虫姤璇存槑
-    txt_path = f"鐢虫姤璇存槑_{year}{month:02d}.txt"
+    # 保存申报说明
+    txt_path = f"申报说明_{year}{month:02d}.txt"
     with open(txt_path, "w", encoding="utf-8") as f:
         f.write(explanation)
-    print(f"[OK] 鐢虫姤璇存槑宸茬敓鎴愶細{txt_path}")
+    print(f"[OK] 申报说明已生成：{txt_path}")
 
     return csv_path, txt_path
 
 
 # ===============================================
-#  涓荤▼搴?# ===============================================
+#  主程序
+# ===============================================
 
 if __name__ == "__main__":
     now = datetime.now()
     year, month = now.year, now.month
 
-    print(f"\n閲戣壋榫橝I绋庡姟鍔╂墜 - {year}骞磠month}鏈堢敵鎶n")
+    print(f"\n金艳龙AI税务助手 - {year}年{month}月申报\n")
     print("-" * 50)
 
-    # 鍛樺伐鏁版嵁锛堝彲淇敼涓?Excel 瀵煎叆锛?    employees = [
+    # 员工数据（可修改为 Excel 导入）
+    employees = [
         {
-            "name": "鍛樺伐A",
+            "name": "员工A",
             "gross": 10522,
             "si_base": 5000,
             "si_actual": 522,
@@ -268,15 +284,15 @@ if __name__ == "__main__":
             emp["special"], emp["child_edu"], emp["infant"], emp["elderly"]
         )
         results.append(r)
-        print(f"  {r['濮撳悕']}锛氫釜绋?{r['搴旂撼绋庨']} 鍏冿紝瀹炲彂 {r['瀹炲彂宸ヨ祫']} 鍏?)
+        print(f"  {r['姓名']}：个税 {r['应纳税额']} 元，实发 {r['实发工资']} 元")
 
-    print("\n姝ｅ湪鐢熸垚 AI 鐢虫姤璇存槑...\n")
+    print("\n正在生成 AI 申报说明...\n")
     explanation = generate_ai_explanation(results, year, month)
     print(explanation)
 
     save_results(results, explanation, year, month)
 
-    print("\n[鎻愮ず] 浣跨敤璇存槑锛?)
-    print("  1. 淇敼涓婃柟 employees 鍒楄〃澧炲姞鍛樺伐")
-    print("  2. 鎴栨帴鍏?Excel 瀵煎叆锛堝弬鑰?tax_web_app.py锛?)
-    print("  3. 纭繚 .env 鏂囦欢宸查厤缃?DEEPSEEK_API_KEY 浠ヤ娇鐢ㄧ湡瀹?AI\n")
+    print("\n[提示] 使用说明：")
+    print("  1. 修改上方 employees 列表增加员工")
+    print("  2. 或接入 Excel 导入（参考 tax_web_app.py）")
+    print("  3. 确保 .env 文件已配置 DEEPSEEK_API_KEY 以使用真实 AI\n")
