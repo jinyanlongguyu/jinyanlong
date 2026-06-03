@@ -2423,7 +2423,7 @@ with tab5:
     stamp_reg_capital = st.session_state.get("stamp_reg_capital", 0.0)
     stamp_capital_increase = st.session_state.get("stamp_capital_increase", 0.0)
     # 购销合同：按当季收入估算（可视收入为含税购销额）
-    stamp_purchase = revenue_disp
+    stamp_purchase = vat5.get("季度含税收入", 0.0) if vat5 else 0.0
     stamp_data = calc_stamp_duty(
         registered_capital=stamp_reg_capital,
         capital_increase=stamp_capital_increase,
