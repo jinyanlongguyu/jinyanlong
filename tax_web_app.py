@@ -2059,6 +2059,7 @@ with tab2:
                 cost_total = profit_data["营业成本"]
                 profit = profit_data["利润总额"]
 
+                expense_total = profit_data["管理费用"]
                 st.subheader("📈 自动汇总结果（本期）")
                 col_a, col_b, col_c, col_d = st.columns(4)
                 col_a.metric("营业收入", f"{revenue_total:.2f}")
@@ -3956,7 +3957,7 @@ with tab6:
 with tab1:
     st.header("🗂️ 年报数据导入")
     st.caption("支持 Excel / PDF 两种格式。导入后年报数据自动拆分为 4 个季度申报底稿。税务年报与内部底稿不一致时，重新导入即可纠偏。")
-    st.success("✅ v1.6.5 — 年报导入模块已就绪（2026-06-03 build）")
+    st.success("✅ v1.6.6 — 年报导入模块已就绪（2026-06-03 build）")
 
     # ── 检查是否有历史导入 ──
     snapshot_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "年报导入快照.json")
